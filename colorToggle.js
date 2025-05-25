@@ -33,9 +33,6 @@ class ColorToggle extends HTMLElement {
 
         this.render();
         this.attachEventListeners();
-
-        // Initialize colorMappings from attributes
-        this.updateColorMappings();
     }
 
     static get observedAttributes() {
@@ -49,28 +46,34 @@ class ColorToggle extends HTMLElement {
 
     attributeChangedCallback(name, oldValue, newValue) {
         if (newValue && newValue !== oldValue) {
-            console.log(`Attribute ${name} changed to ${newValue}`); // Log attribute change
-            this.updateColorMappings();
-            if (this.isToggled) {
-                this.refresh();
+            const match = name.match(/(original|replacement)-color-(\d+)/);
+            if (match) {
+                const type = match[1];
+                const index = parseInt(match[2]);
+                const propKey = `${type}Color${index}`;
+                if (type === 'original') {
+                    const replacementProp = `replacement-color-${index}`;
+                    const replacementValue = this.getAttribute(replacementProp) || this.colorMappings[this.getKeyByIndex(index - 1)] || '#FFFFFF';
+                    const oldKey = this.getKeyByIndex(index - 1);
+                    if (oldKey && oldKey !== newValue) {
+                        delete this.colorMappings[oldKey];
+                    }
+                    this.colorMappings[newValue] = replacementValue;
+                } else if (type === 'replacement') {
+                    const originalProp = `original-color-${index}`;
+                    const originalValue = this.getAttribute(originalProp) || this.getKeyByIndex(index - 1) || '#000000';
+                    this.colorMappings[originalValue] = newValue;
+                }
+                if (this.isToggled) {
+                    this.refresh();
+                }
             }
         }
     }
 
-    updateColorMappings() {
-        // Clear existing mappings
-        this.colorMappings = {};
-
-        // Rebuild mappings from attributes
-        for (let i = 1; i <= 20; i++) {
-            const originalColor = this.getAttribute(`original-color-${i}`);
-            const replacementColor = this.getAttribute(`replacement-color-${i}`);
-            if (originalColor && replacementColor) {
-                this.colorMappings[originalColor] = replacementColor;
-            }
-        }
-
-        console.log('Updated colorMappings:', this.colorMappings); // Log updated mappings
+    getKeyByIndex(index) {
+        const keys = Object.keys(this.colorMappings);
+        return keys[index] || null;
     }
 
     render() {
@@ -80,6 +83,7 @@ class ColorToggle extends HTMLElement {
                     display: inline-block;
                     font-family: Arial, sans-serif;
                 }
+                
                 .toggle-container {
                     display: flex;
                     align-items: center;
@@ -92,9 +96,11 @@ class ColorToggle extends HTMLElement {
                     cursor: pointer;
                     transition: all 0.3s ease;
                 }
+                
                 .toggle-container:hover {
                     background: #e8e8e8;
                 }
+                
                 .toggle-switch {
                     position: relative;
                     width: 50px;
@@ -104,9 +110,11 @@ class ColorToggle extends HTMLElement {
                     transition: background 0.3s ease;
                     cursor: pointer;
                 }
+                
                 .toggle-switch.active {
                     background: #4CAF50;
                 }
+                
                 .toggle-slider {
                     position: absolute;
                     top: 2px;
@@ -118,20 +126,24 @@ class ColorToggle extends HTMLElement {
                     transition: transform 0.3s ease;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
+                
                 .toggle-switch.active .toggle-slider {
                     transform: translateX(25px);
                 }
+                
                 .toggle-label {
                     font-size: 14px;
                     color: #333;
                     font-weight: 500;
                 }
+                
                 .status-indicator {
                     font-size: 12px;
                     color: #666;
                     font-style: italic;
                 }
             </style>
+            
             <div class="toggle-container">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
@@ -149,9 +161,10 @@ class ColorToggle extends HTMLElement {
         const handleToggle = (e) => {
             e.preventDefault();
             e.stopPropagation();
+
             this.isToggled = !this.isToggled;
-            console.log('Toggle state:', this.isToggled ? 'Dark' : 'Light'); // Log toggle state
             this.updateToggleState();
+
             requestAnimationFrame(() => {
                 this.toggleColors();
             });
@@ -164,8 +177,14 @@ class ColorToggle extends HTMLElement {
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
-        toggleSwitch.classList.toggle('active', this.isToggled);
-        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
+
+        if (this.isToggled) {
+            toggleSwitch.classList.add('active');
+            statusIndicator.textContent = 'Dark Mode';
+        } else {
+            toggleSwitch.classList.remove('active');
+            statusIndicator.textContent = 'Light Mode';
+        }
     }
 
     colorToHex(color) {
@@ -266,7 +285,6 @@ class ColorToggle extends HTMLElement {
             }
         });
 
-        console.log(`Applying mapping to ${value} -> ${newValue}`); // Log color mapping
         return newValue;
     }
 
@@ -303,7 +321,6 @@ class ColorToggle extends HTMLElement {
     }
 
     toggleColors() {
-        console.log('Toggling colors with mappings:', this.colorMappings); // Log mappings on toggle
         if (this.isToggled) {
             this.applyColorChanges();
         } else {
@@ -385,11 +402,10 @@ class ColorToggle extends HTMLElement {
     }
 
     getTheme() {
-        return this.isToggled ? 'dark' : 'light';
+        return this.isToggled ? 'light' : 'dark';
     }
 
     refresh() {
-        console.log('Refreshing theme with mappings:', this.colorMappings); // Log refresh
         if (this.isToggled) {
             this.applyColorChanges();
         }
