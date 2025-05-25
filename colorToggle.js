@@ -4,8 +4,8 @@ class ColorToggleElement extends HTMLElement {
     constructor() {
         super();
         this.settings = {
-            originalColors: '', // String like "background,#ffffff;text,#000000"
-            replacementColors: '', // String like "background,#ff0000;text,#ffffff"
+            originalColors: '#222820,#424D3F,#787E76,#A3A9A1,#ECECEC,#B8C995', // Default original colors
+            replacementColors: '#FFFFFF,#F0F0F0,#C2C2C2,#6E6E6E,#000000,#1A6AFF', // Default replacement colors
             isToggled: false // Tracks toggle state
         };
         this.attachShadow({ mode: 'open' });
@@ -29,16 +29,7 @@ class ColorToggleElement extends HTMLElement {
 
     parseColors(colorString) {
         if (!colorString) return [];
-        const entries = colorString.split(';');
-        return entries
-            .map(entry => {
-                const [key, value] = entry.split(',');
-                if (key && value) {
-                    return { key: key.trim(), value: value.trim() };
-                }
-                return null;
-            })
-            .filter(item => item !== null);
+        return colorString.split(',').map(color => color.trim()).filter(color => color);
     }
 
     renderToggle() {
@@ -119,17 +110,13 @@ class ColorToggleElement extends HTMLElement {
         const originalColors = this.parseColors(this.settings.originalColors);
         const replacementColors = this.parseColors(this.settings.replacementColors);
 
-        // Apply colors to the document or specific elements
-        originalColors.forEach((orig, index) => {
-            const repl = replacementColors[index] || orig; // Fallback to original if no replacement
-            const elements = document.querySelectorAll(`[data-color-key="${orig.key}"]`) || [document.body];
+        // Apply colors to elements with data-color-index attributes
+        originalColors.forEach((origColor, index) => {
+            const replColor = replacementColors[index] || origColor; // Fallback to original if no replacement
+            const elements = document.querySelectorAll(`[data-color-index="${index}"]`) || [document.body];
             elements.forEach(element => {
-                if (orig.key === 'background') {
-                    element.style.backgroundColor = this.settings.isToggled ? repl.value : orig.value;
-                } else if (orig.key === 'text') {
-                    element.style.color = this.settings.isToggled ? repl.value : orig.value;
-                }
-                // Add more style properties as needed (e.g., border, etc.)
+                // Apply as background color; can be extended for other properties
+                element.style.backgroundColor = this.settings.isToggled ? replColor : origColor;
             });
         });
     }
