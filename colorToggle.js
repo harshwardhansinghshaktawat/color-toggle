@@ -18,12 +18,13 @@ class ColorToggle extends HTMLElement {
         if (name === 'options' && newValue && newValue !== oldValue) {
             try {
                 const options = JSON.parse(newValue);
-                // Update colorMappings from originalColors and replacementColors
                 this.updateColorMappings(options.originalColors, options.replacementColors);
-                // Apply or revert colors based on toggle state
-                requestAnimationFrame(() => {
-                    this.toggleColors();
-                });
+                // Reapply colors if toggled
+                if (this.isToggled) {
+                    requestAnimationFrame(() => {
+                        this.applyColorChanges();
+                    });
+                }
             } catch (e) {
                 console.error('Error parsing options:', e);
             }
@@ -35,7 +36,6 @@ class ColorToggle extends HTMLElement {
         if (originalColors && replacementColors) {
             const originalArray = originalColors.split(',').map(c => c.trim().toUpperCase());
             const replacementArray = replacementColors.split(',').map(c => c.trim().toUpperCase());
-            // Pair corresponding colors, ignoring invalid entries
             originalArray.forEach((orig, index) => {
                 if (this.isValidHex(orig) && this.isValidHex(replacementArray[index])) {
                     this.colorMappings[orig] = replacementArray[index];
@@ -121,12 +121,10 @@ class ColorToggle extends HTMLElement {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const container = this.shadowRoot.querySelector('.toggle-container');
 
-        const handleToggle = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
+        const handleToggle = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
             this.isToggled = !this.isToggled;
-            // Update widget property
-            wixWidget.setProps({ isToggled: this.isToggled.toString() });
             this.updateToggleState();
             requestAnimationFrame(() => {
                 this.toggleColors();
@@ -172,13 +170,7 @@ class ColorToggle extends HTMLElement {
     isTransparent(color) {
         if (!color) return true;
         const normalized = color.toLowerCase().replace(/\s/g, '');
-        const transparentValues = [
-            'transparent',
-            'rgba(0,0,0,0)',
-            'rgba(0,0,0,0.0)',
-            'hsla(0,0%,0%,0)',
-            'hsla(0,0%,0%,0.0)'
-        ];
+        const transparentValues = ['transparent', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.0)', 'hsla(0,0%,0%,0)', 'hsla(0,0%,0%,0.0)'];
         if (transparentValues.includes(normalized)) return true;
         const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
         return !!alphaMatch;
@@ -317,7 +309,7 @@ class ColorToggle extends HTMLElement {
 
         allElements.forEach(processElement);
         this.dispatchEvent(new CustomEvent('themeChanged', {
-            detail: { theme: 'dark', isToggled: true }
+            detail: { theme: 'dark' }
         }));
     }
 
@@ -336,36 +328,8 @@ class ColorToggle extends HTMLElement {
         this.modifiedElements.clear();
         this.originalStyles.clear();
         this.dispatchEvent(new CustomEvent('themeChanged', {
-            detail: { theme: 'light', isToggled: false }
+            detail: { theme: 'light' }
         }));
-    }
-
-    setTheme(theme) {
-        if (theme === 'dark' && !this.isToggled) {
-            this.isToggled = true;
-            wixWidget.setProps({ isToggled: 'true' });
-            this.updateToggleState();
-            this.applyColorChanges();
-        } else if (theme === 'light' && this.isToggled) {
-            this.isToggled = false;
-            wixWidget.setProps({ isToggled: 'false' });
-            this.updateToggleState();
-            this.revertColorChanges();
-        }
-    }
-
-    getTheme() {
-        return this.isToggled ? 'dark' : 'light';
-    }
-
-    refresh() {
-        if (this.isToggled) {
-            this.applyColorChanges();
-        }
-    }
-
-    getColorMappings() {
-        return { ...this.colorMappings };
     }
 
     disconnectedCallback() {
