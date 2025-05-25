@@ -1,8 +1,12 @@
+// Import backend storage functions
+import { getDarkModePreference, setDarkModePreference } from 'backend/darkModeStorage';
+
 class ColorToggle extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
         this.isToggled = false;
+        this.isInitialized = false;
         
         // Color mappings: original -> new
         this.colorMappings = {
@@ -20,6 +24,37 @@ class ColorToggle extends HTMLElement {
         
         this.render();
         this.attachEventListeners();
+    }
+    
+    async connectedCallback() {
+        // Load saved preference when element is added to DOM
+        await this.loadSavedPreference();
+    }
+    
+    async loadSavedPreference() {
+        try {
+            const savedDarkMode = await getDarkModePreference();
+            this.isToggled = savedDarkMode;
+            this.updateToggleState();
+            
+            // Apply the saved theme
+            if (this.isToggled) {
+                this.applyColorChanges();
+            }
+            
+            this.isInitialized = true;
+        } catch (error) {
+            console.warn('Could not load dark mode preference:', error);
+            this.isInitialized = true;
+        }
+    }
+    
+    async savePreference() {
+        try {
+            await setDarkModePreference(this.isToggled);
+        } catch (error) {
+            console.warn('Could not save dark mode preference:', error);
+        }
     }
     
     render() {
@@ -41,6 +76,11 @@ class ColorToggle extends HTMLElement {
                     user-select: none;
                     cursor: pointer;
                     transition: all 0.3s ease;
+                    opacity: 0.7;
+                }
+                
+                .toggle-container.initialized {
+                    opacity: 1;
                 }
                 
                 .toggle-container:hover {
@@ -88,42 +128,69 @@ class ColorToggle extends HTMLElement {
                     color: #666;
                     font-style: italic;
                 }
+                
+                .loading {
+                    font-size: 12px;
+                    color: #999;
+                    font-style: italic;
+                }
             </style>
             
-            <div class="toggle-container">
+            <div class="toggle-container" id="toggleContainer">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
                 </div>
                 <div class="toggle-label">Theme Toggle</div>
-                <div class="status-indicator" id="statusIndicator">Light Mode</div>
+                <div class="status-indicator" id="statusIndicator">
+                    <span class="loading">Loading...</span>
+                </div>
             </div>
         `;
     }
     
     attachEventListeners() {
-        const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
-        const container = this.shadowRoot.querySelector('.toggle-container');
+        const toggleContainer = this.shadowRoot.getElementById('toggleContainer');
         
-        const handleToggle = () => {
+        const handleToggle = async (event) => {
+            // Prevent multiple rapid clicks
+            if (!this.isInitialized) return;
+            
+            event.preventDefault();
+            event.stopPropagation();
+            
+            // Toggle the state immediately
             this.isToggled = !this.isToggled;
+            
+            // Update UI immediately
             this.updateToggleState();
+            
+            // Apply/revert colors
             this.toggleColors();
+            
+            // Save preference asynchronously
+            await this.savePreference();
         };
         
-        toggleSwitch.addEventListener('click', handleToggle);
-        container.addEventListener('click', handleToggle);
+        // Use single event listener on container to avoid double-firing
+        toggleContainer.addEventListener('click', handleToggle);
     }
     
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
+        const toggleContainer = this.shadowRoot.getElementById('toggleContainer');
+        
+        // Mark as initialized
+        if (this.isInitialized) {
+            toggleContainer.classList.add('initialized');
+        }
         
         if (this.isToggled) {
             toggleSwitch.classList.add('active');
-            statusIndicator.textContent = 'Dark Mode';
+            statusIndicator.innerHTML = 'Dark Mode';
         } else {
             toggleSwitch.classList.remove('active');
-            statusIndicator.textContent = 'Light Mode';
+            statusIndicator.innerHTML = 'Light Mode';
         }
     }
     
@@ -351,15 +418,17 @@ class ColorToggle extends HTMLElement {
     }
     
     // Public methods for external control
-    setTheme(theme) {
+    async setTheme(theme) {
         if (theme === 'dark' && !this.isToggled) {
             this.isToggled = true;
             this.updateToggleState();
             this.applyColorChanges();
+            await this.savePreference();
         } else if (theme === 'light' && this.isToggled) {
             this.isToggled = false;
             this.updateToggleState();
             this.revertColorChanges();
+            await this.savePreference();
         }
     }
     
@@ -372,6 +441,11 @@ class ColorToggle extends HTMLElement {
         if (this.isToggled) {
             this.applyColorChanges();
         }
+    }
+    
+    // Check if the component is ready
+    isReady() {
+        return this.isInitialized;
     }
     
     // Clean up when element is removed
