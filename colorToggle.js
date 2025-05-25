@@ -1,129 +1,380 @@
-// colorToggle.js
-
-class ColorToggleElement extends HTMLElement {
+class ColorToggle extends HTMLElement {
     constructor() {
         super();
-        this.settings = {
-            originalColors: '#222820,#424D3F,#787E76,#A3A9A1,#ECECEC,#B8C995', // Default original colors
-            replacementColors: '#FFFFFF,#F0F0F0,#C2C2C2,#6E6E6E,#000000,#1A6AFF', // Default replacement colors
-            isToggled: false // Tracks toggle state
-        };
         this.attachShadow({ mode: 'open' });
+        this.isToggled = false;
+        
+        // Start with empty color mappings - will be populated from panel
+        this.colorMappings = {};
+        
+        // Store original styles
+        this.originalStyles = new Map();
+        this.modifiedElements = new Set();
+        
+        this.render();
+        this.attachEventListeners();
     }
-
-    connectedCallback() {
-        this.renderToggle();
-    }
-
+    
     static get observedAttributes() {
-        return ['options'];
+        return ['data'];
     }
-
+    
     attributeChangedCallback(name, oldValue, newValue) {
-        if (newValue && newValue !== oldValue && name === 'options') {
-            const newOptions = JSON.parse(newValue);
-            Object.assign(this.settings, newOptions);
-            this.applyColors(); // Apply colors when settings change
+        if (newValue && newValue !== oldValue) {
+            if (name === 'data') {
+                const colorData = JSON.parse(newValue);
+                this.updateColorMappings(colorData);
+                
+                // If toggle is currently active, reapply changes with new mappings
+                if (this.isToggled && Object.keys(this.colorMappings).length > 0) {
+                    this.applyColorChanges();
+                }
+            }
         }
     }
-
-    parseColors(colorString) {
-        if (!colorString) return [];
-        return colorString.split(',').map(color => color.trim()).filter(color => color);
-    }
-
-    renderToggle() {
-        // Clear existing content
-        while (this.shadowRoot.firstChild) {
-            this.shadowRoot.removeChild(this.shadowRoot.firstChild);
+    
+    updateColorMappings(colorData) {
+        this.colorMappings = {};
+        
+        if (!colorData.originalColors || !colorData.replacementColors) {
+            return;
         }
-
-        // Create toggle switch
-        const toggleContainer = document.createElement('div');
-        toggleContainer.innerHTML = `
+        
+        const originals = colorData.originalColors.split(',').map(c => c.trim()).filter(c => c);
+        const replacements = colorData.replacementColors.split(',').map(c => c.trim()).filter(c => c);
+        
+        // Create mappings from the two arrays - handle as many as user provides
+        originals.forEach((original, index) => {
+            if (original && replacements[index]) {
+                // Normalize hex colors
+                const normalizedOriginal = original.startsWith('#') ? original.toUpperCase() : `#${original.toUpperCase()}`;
+                const normalizedReplacement = replacements[index].startsWith('#') ? 
+                    replacements[index].toUpperCase() : `#${replacements[index].toUpperCase()}`;
+                
+                this.colorMappings[normalizedOriginal] = normalizedReplacement;
+            }
+        });
+    }
+    
+    render() {
+        this.shadowRoot.innerHTML = `
             <style>
                 :host {
                     display: inline-block;
-                    position: relative;
+                    font-family: Arial, sans-serif;
                 }
+                
+                .toggle-container {
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px;
+                    background: #f5f5f5;
+                    border-radius: 8px;
+                    border: 1px solid #ddd;
+                    user-select: none;
+                    cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                
+                .toggle-container:hover {
+                    background: #e8e8e8;
+                }
+                
                 .toggle-switch {
                     position: relative;
-                    width: 60px;
-                    height: 34px;
+                    width: 50px;
+                    height: 25px;
+                    background: #ccc;
+                    border-radius: 25px;
+                    transition: background 0.3s ease;
+                    cursor: pointer;
                 }
-                .toggle-checkbox {
-                    opacity: 0;
-                    width: 0;
-                    height: 0;
+                
+                .toggle-switch.active {
+                    background: #4CAF50;
                 }
+                
                 .toggle-slider {
                     position: absolute;
-                    cursor: pointer;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background-color: #ccc;
-                    transition: 0.4s;
-                    border-radius: 34px;
-                }
-                .toggle-slider:before {
-                    position: absolute;
-                    content: "";
-                    height: 26px;
-                    width: 26px;
-                    left: 4px;
-                    bottom: 4px;
-                    background-color: white;
-                    transition: 0.4s;
+                    top: 2px;
+                    left: 2px;
+                    width: 21px;
+                    height: 21px;
+                    background: white;
                     border-radius: 50%;
+                    transition: transform 0.3s ease;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
-                .toggle-checkbox:checked + .toggle-slider {
-                    background-color: #2196F3;
+                
+                .toggle-switch.active .toggle-slider {
+                    transform: translateX(25px);
                 }
-                .toggle-checkbox:checked + .toggle-slider:before {
-                    transform: translateX(26px);
+                
+                .toggle-label {
+                    font-size: 14px;
+                    color: #333;
+                    font-weight: 500;
+                }
+                
+                .status-indicator {
+                    font-size: 12px;
+                    color: #666;
+                    font-style: italic;
                 }
             </style>
-            <label class="toggle-switch">
-                <input type="checkbox" class="toggle-checkbox">
-                <span class="toggle-slider"></span>
-            </label>
+            
+            <div class="toggle-container">
+                <div class="toggle-switch" id="toggleSwitch">
+                    <div class="toggle-slider"></div>
+                </div>
+                <div class="toggle-label">Theme Toggle</div>
+                <div class="status-indicator" id="statusIndicator">Light Mode</div>
+            </div>
         `;
-        this.shadowRoot.appendChild(toggleContainer);
-
-        // Add event listener for toggle
-        const checkbox = this.shadowRoot.querySelector('.toggle-checkbox');
-        checkbox.checked = this.settings.isToggled;
-        checkbox.addEventListener('change', () => {
-            this.settings.isToggled = checkbox.checked;
-            this.applyColors();
-            // Update widget props to persist toggle state
-            window.wixWidget.setProps({ isToggled: this.settings.isToggled });
-        });
-
-        // Apply initial colors
-        this.applyColors();
     }
-
-    applyColors() {
-        const originalColors = this.parseColors(this.settings.originalColors);
-        const replacementColors = this.parseColors(this.settings.replacementColors);
-
-        // Apply colors to elements with data-color-index attributes
-        originalColors.forEach((origColor, index) => {
-            const replColor = replacementColors[index] || origColor; // Fallback to original if no replacement
-            const elements = document.querySelectorAll(`[data-color-index="${index}"]`) || [document.body];
-            elements.forEach(element => {
-                // Apply as background color; can be extended for other properties
-                element.style.backgroundColor = this.settings.isToggled ? replColor : origColor;
+    
+    attachEventListeners() {
+        const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
+        const container = this.shadowRoot.querySelector('.toggle-container');
+        
+        const handleToggle = (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            
+            this.isToggled = !this.isToggled;
+            this.updateToggleState();
+            
+            requestAnimationFrame(() => {
+                this.toggleColors();
+            });
+        };
+        
+        toggleSwitch.addEventListener('click', handleToggle);
+        container.addEventListener('click', handleToggle);
+    }
+    
+    updateToggleState() {
+        const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
+        const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
+        
+        if (this.isToggled) {
+            toggleSwitch.classList.add('active');
+            statusIndicator.textContent = 'Dark Mode';
+        } else {
+            toggleSwitch.classList.remove('active');
+            statusIndicator.textContent = 'Light Mode';
+        }
+    }
+    
+    colorToHex(color) {
+        if (!color) return null;
+        
+        color = color.trim();
+        
+        if (color.startsWith('#')) {
+            const hex = color.toUpperCase();
+            if (hex.length === 4) {
+                return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+            }
+            return hex;
+        }
+        
+        if (color.startsWith('rgb')) {
+            const values = color.match(/\d+/g);
+            if (values && values.length >= 3) {
+                const r = parseInt(values[0]);
+                const g = parseInt(values[1]);
+                const b = parseInt(values[2]);
+                return '#' + [r, g, b].map(x => {
+                    const hex = x.toString(16);
+                    return hex.length === 1 ? '0' + hex : hex;
+                }).join('').toUpperCase();
+            }
+        }
+        
+        return null;
+    }
+    
+    isTransparent(color) {
+        if (!color) return true;
+        
+        const normalized = color.toLowerCase().replace(/\s/g, '');
+        const transparentValues = [
+            'transparent',
+            'rgba(0,0,0,0)',
+            'rgba(0,0,0,0.0)',
+            'hsla(0,0%,0%,0)',
+            'hsla(0,0%,0%,0.0)'
+        ];
+        
+        if (transparentValues.includes(normalized)) return true;
+        
+        const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
+        return !!alphaMatch;
+    }
+    
+    getColorProperties() {
+        return [
+            'color',
+            'backgroundColor',
+            'borderColor',
+            'borderTopColor',
+            'borderRightColor',
+            'borderBottomColor',
+            'borderLeftColor',
+            'outlineColor',
+            'boxShadow',
+            'textShadow',
+            'fill',
+            'stroke'
+        ];
+    }
+    
+    applyColorMapping(value, isReverse = false) {
+        if (!value) return value;
+        
+        let newValue = value;
+        const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
+        
+        Object.entries(mappings).forEach(([original, replacement]) => {
+            const originalRgb = this.hexToRgb(original);
+            const replacementColor = replacement;
+            
+            if (originalRgb) {
+                const hexPatterns = [
+                    new RegExp(original, 'gi'),
+                    new RegExp(original.substring(1), 'gi')
+                ];
+                
+                hexPatterns.forEach(pattern => {
+                    newValue = newValue.replace(pattern, replacementColor);
+                });
+                
+                const rgbPattern = new RegExp(
+                    `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`, 
+                    'gi'
+                );
+                newValue = newValue.replace(rgbPattern, replacementColor);
+                
+                const rgbaPattern = new RegExp(
+                    `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`, 
+                    'gi'
+                );
+                
+                if (replacement.startsWith('#')) {
+                    const replacementRgb = this.hexToRgb(replacement);
+                    if (replacementRgb) {
+                        newValue = newValue.replace(rgbaPattern, (match, alpha) => {
+                            return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
+                        });
+                    }
+                }
+            }
+        });
+        
+        return newValue;
+    }
+    
+    hexToRgb(hex) {
+        const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
+    }
+    
+    getReverseMappings() {
+        const reverse = {};
+        Object.entries(this.colorMappings).forEach(([key, value]) => {
+            reverse[value] = key;
+        });
+        return reverse;
+    }
+    
+    shouldProcessElement(element) {
+        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
+        if (skipTags.includes(element.tagName)) return false;
+        if (element.getRootNode() !== document) return false;
+        return true;
+    }
+    
+    shouldChangeColor(color) {
+        if (!color || this.isTransparent(color)) return false;
+        
+        const hex = this.colorToHex(color);
+        if (!hex) return false;
+        
+        const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
+        return allColors.includes(hex);
+    }
+    
+    toggleColors() {
+        if (this.isToggled) {
+            this.applyColorChanges();
+        } else {
+            this.revertColorChanges();
+        }
+    }
+    
+    applyColorChanges() {
+        this.revertColorChanges();
+        
+        const allElements = document.querySelectorAll('*');
+        
+        allElements.forEach(element => {
+            if (!this.shouldProcessElement(element)) return;
+            
+            const computedStyle = window.getComputedStyle(element);
+            const originalStyles = {};
+            let hasChanges = false;
+            
+            this.getColorProperties().forEach(property => {
+                const computedValue = computedStyle[property];
+                const currentInlineValue = element.style[property];
+                
+                if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
+                    return;
+                }
+                
+                if (this.shouldChangeColor(computedValue)) {
+                    originalStyles[property] = currentInlineValue || '';
+                    
+                    const newValue = this.applyColorMapping(computedValue, false);
+                    element.style[property] = newValue;
+                    hasChanges = true;
+                }
+            });
+            
+            if (hasChanges) {
+                this.originalStyles.set(element, originalStyles);
+                this.modifiedElements.add(element);
+            }
+        });
+    }
+    
+    revertColorChanges() {
+        this.modifiedElements.forEach(element => {
+            const originalStyles = this.originalStyles.get(element);
+            if (!originalStyles) return;
+            
+            Object.entries(originalStyles).forEach(([property, originalValue]) => {
+                if (originalValue !== '') {
+                    element.style[property] = originalValue;
+                } else {
+                    element.style.removeProperty(property);
+                }
             });
         });
+        
+        this.modifiedElements.clear();
+        this.originalStyles.clear();
     }
-
+    
     disconnectedCallback() {
-        // Clean up event listeners if necessary
+        this.revertColorChanges();
     }
 }
 
-customElements.define('color-toggle', ColorToggleElement);
+customElements.define('color-toggle', ColorToggle);
