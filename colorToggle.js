@@ -4,7 +4,7 @@ class ColorToggle extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this.isToggled = false;
 
-        // Default color mappings (empty initially to preserve original theme)
+        // Default color mappings (for reference, not applied initially)
         this.defaultColorMappings = {
             '#222820': '#FFFFFF',
             '#424D3F': '#F0F0F0',
@@ -19,7 +19,7 @@ class ColorToggle extends HTMLElement {
             '#798562': '#B0B0B0'
         };
 
-        // Active color mappings (will be updated by panel inputs)
+        // Active color mappings (starts empty to preserve original theme)
         this.colorMappings = {};
 
         // Store original styles and modified elements
@@ -30,44 +30,54 @@ class ColorToggle extends HTMLElement {
         this.attachEventListeners();
     }
 
-    // Define observed attributes for widget properties
     static get observedAttributes() {
         return ['originalColors', 'replacementColors'];
     }
 
-    // Handle attribute changes from the panel
     attributeChangedCallback(name, oldValue, newValue) {
-        if (newValue !== oldValue && newValue) {
-            this.updateColorMappings();
-            if (this.isToggled) {
-                requestAnimationFrame(() => {
-                    this.applyColorChanges();
-                });
+        if (newValue && newValue !== oldValue) {
+            try {
+                if (name === 'originalColors' || name === 'replacementColors') {
+                    this.updateColorMappings();
+                    if (this.isToggled) {
+                        requestAnimationFrame(() => {
+                            this.applyColorChanges();
+                        });
+                    }
+                }
+            } catch (e) {
+                console.error(`Failed to parse ${name}:`, e);
             }
         }
     }
 
-    // Update colorMappings based on originalColors and replacementColors
     updateColorMappings() {
-        // Start with an empty mapping to preserve original theme
         this.colorMappings = {};
 
-        // Get properties from attributes
-        const originalColors = this.getAttribute('originalColors') || '';
-        const replacementColors = this.getAttribute('replacementColors') || '';
+        let originalColors = [];
+        let replacementColors = [];
 
-        // Parse comma-separated colors
-        const originalColorsArray = originalColors.split(',').map(color => this.colorToHex(color.trim())).filter(Boolean);
-        const replacementColorsArray = replacementColors.split(',').map(color => this.colorToHex(color.trim())).filter(Boolean);
+        try {
+            const originalColorsAttr = this.getAttribute('originalColors');
+            const replacementColorsAttr = this.getAttribute('replacementColors');
 
-        // Create mappings only for user-specified colors
-        originalColorsArray.forEach((originalColor, index) => {
-            if (replacementColorsArray[index]) {
-                this.colorMappings[originalColor] = replacementColorsArray[index];
+            originalColors = originalColorsAttr ? JSON.parse(originalColorsAttr) : [];
+            replacementColors = replacementColorsAttr ? JSON.parse(replacementColorsAttr) : [];
+        } catch (e) {
+            console.error('Failed to parse color attributes:', e);
+            return;
+        }
+
+        // Validate and pair colors
+        originalColors.forEach((color, index) => {
+            if (this.isValidHexColor(color) && replacementColors[index] && this.isValidHexColor(replacementColors[index])) {
+                this.colorMappings[color.toUpperCase()] = replacementColors[index].toUpperCase();
             }
         });
+    }
 
-        // If no user-specified colors, keep colorMappings empty to avoid applying default mappings
+    isValidHexColor(color) {
+        return /^#[0-9A-F]{6}$/i.test(color);
     }
 
     render() {
@@ -158,7 +168,6 @@ class ColorToggle extends HTMLElement {
 
             this.isToggled = !this.isToggled;
             this.updateToggleState();
-
             requestAnimationFrame(() => {
                 this.toggleColors();
             });
