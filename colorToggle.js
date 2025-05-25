@@ -4,8 +4,8 @@ class ColorToggle extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this.isToggled = false;
 
-        // Initialize color mappings with defaults
-        this.colorMappings = {
+        // Default color mappings (empty initially to preserve original theme)
+        this.defaultColorMappings = {
             '#222820': '#FFFFFF',
             '#424D3F': '#F0F0F0',
             '#787E76': '#C2C2C2',
@@ -16,18 +16,13 @@ class ColorToggle extends HTMLElement {
             '#DAE4C7': '#2A2A2A',
             '#E9F0DC': '#1A1A1A',
             '#5C654B': '#F8F8F8',
-            '#798562': '#B0B0B0',
-            '#333333': '#CCCCCC',
-            '#555555': '#AAAAAA',
-            '#777777': '#888888',
-            '#999999': '#666666',
-            '#BBBBBB': '#444444',
-            '#DDDDDD': '#222222',
-            '#111111': '#EEEEEE',
-            '#444444': '#BBBBBB',
-            '#666666': '#999999'
+            '#798562': '#B0B0B0'
         };
 
+        // Active color mappings (will be updated by panel inputs)
+        this.colorMappings = {};
+
+        // Store original styles and modified elements
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
 
@@ -35,45 +30,44 @@ class ColorToggle extends HTMLElement {
         this.attachEventListeners();
     }
 
+    // Define observed attributes for widget properties
     static get observedAttributes() {
-        const attributes = [];
-        for (let i = 1; i <= 20; i++) {
-            attributes.push(`original-color-${i}`);
-            attributes.push(`replacement-color-${i}`);
-        }
-        return attributes;
+        return ['originalColors', 'replacementColors'];
     }
 
+    // Handle attribute changes from the panel
     attributeChangedCallback(name, oldValue, newValue) {
-        if (newValue && newValue !== oldValue) {
-            const match = name.match(/(original|replacement)-color-(\d+)/);
-            if (match) {
-                const type = match[1];
-                const index = parseInt(match[2]);
-                const propKey = `${type}Color${index}`;
-                if (type === 'original') {
-                    const replacementProp = `replacement-color-${index}`;
-                    const replacementValue = this.getAttribute(replacementProp) || this.colorMappings[this.getKeyByIndex(index - 1)] || '#FFFFFF';
-                    const oldKey = this.getKeyByIndex(index - 1);
-                    if (oldKey && oldKey !== newValue) {
-                        delete this.colorMappings[oldKey];
-                    }
-                    this.colorMappings[newValue] = replacementValue;
-                } else if (type === 'replacement') {
-                    const originalProp = `original-color-${index}`;
-                    const originalValue = this.getAttribute(originalProp) || this.getKeyByIndex(index - 1) || '#000000';
-                    this.colorMappings[originalValue] = newValue;
-                }
-                if (this.isToggled) {
-                    this.refresh();
-                }
+        if (newValue !== oldValue && newValue) {
+            this.updateColorMappings();
+            if (this.isToggled) {
+                requestAnimationFrame(() => {
+                    this.applyColorChanges();
+                });
             }
         }
     }
 
-    getKeyByIndex(index) {
-        const keys = Object.keys(this.colorMappings);
-        return keys[index] || null;
+    // Update colorMappings based on originalColors and replacementColors
+    updateColorMappings() {
+        // Start with an empty mapping to preserve original theme
+        this.colorMappings = {};
+
+        // Get properties from attributes
+        const originalColors = this.getAttribute('originalColors') || '';
+        const replacementColors = this.getAttribute('replacementColors') || '';
+
+        // Parse comma-separated colors
+        const originalColorsArray = originalColors.split(',').map(color => this.colorToHex(color.trim())).filter(Boolean);
+        const replacementColorsArray = replacementColors.split(',').map(color => this.colorToHex(color.trim())).filter(Boolean);
+
+        // Create mappings only for user-specified colors
+        originalColorsArray.forEach((originalColor, index) => {
+            if (replacementColorsArray[index]) {
+                this.colorMappings[originalColor] = replacementColorsArray[index];
+            }
+        });
+
+        // If no user-specified colors, keep colorMappings empty to avoid applying default mappings
     }
 
     render() {
@@ -189,31 +183,41 @@ class ColorToggle extends HTMLElement {
 
     colorToHex(color) {
         if (!color) return null;
+
         color = color.trim();
         if (color.startsWith('#')) {
             const hex = color.toUpperCase();
             if (hex.length === 4) {
                 return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
             }
-            return hex;
+            return hex.length === 7 ? hex : null;
         }
+
         if (color.startsWith('rgb')) {
             const values = color.match(/\d+/g);
             if (values && values.length >= 3) {
                 const r = parseInt(values[0]);
                 const g = parseInt(values[1]);
                 const b = parseInt(values[2]);
-                return '#' + [r, g, b].map(x => {
-                    const hex = x.toString(16);
-                    return hex.length === 1 ? '0' + hex : hex;
-                }).join('').toUpperCase();
+                return (
+                    '#' +
+                    [r, g, b]
+                        .map(x => {
+                            const hex = x.toString(16);
+                            return hex.length === 1 ? '0' + hex : hex;
+                        })
+                        .join('')
+                        .toUpperCase()
+                );
             }
         }
+
         return null;
     }
 
     isTransparent(color) {
         if (!color) return true;
+
         const normalized = color.toLowerCase().replace(/\s/g, '');
         const transparentValues = [
             'transparent',
@@ -222,7 +226,9 @@ class ColorToggle extends HTMLElement {
             'hsla(0,0%,0%,0)',
             'hsla(0,0%,0%,0.0)'
         ];
+
         if (transparentValues.includes(normalized)) return true;
+
         const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
         return !!alphaMatch;
     }
@@ -246,6 +252,7 @@ class ColorToggle extends HTMLElement {
 
     applyColorMapping(value, isReverse = false) {
         if (!value) return value;
+
         let newValue = value;
         const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
 
@@ -254,10 +261,7 @@ class ColorToggle extends HTMLElement {
             const replacementColor = replacement;
 
             if (originalRgb) {
-                const hexPatterns = [
-                    new RegExp(original, 'gi'),
-                    new RegExp(original.substring(1), 'gi')
-                ];
+                const hexPatterns = [new RegExp(original, 'gi'), new RegExp(original.substring(1), 'gi')];
 
                 hexPatterns.forEach(pattern => {
                     newValue = newValue.replace(pattern, replacementColor);
@@ -290,11 +294,13 @@ class ColorToggle extends HTMLElement {
 
     hexToRgb(hex) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result ? {
-            r: parseInt(result[1], 16),
-            g: parseInt(result[2], 16),
-            b: parseInt(result[3], 16)
-        } : null;
+        return result
+            ? {
+                  r: parseInt(result[1], 16),
+                  g: parseInt(result[2], 16),
+                  b: parseInt(result[3], 16)
+              }
+            : null;
     }
 
     getReverseMappings() {
@@ -314,10 +320,11 @@ class ColorToggle extends HTMLElement {
 
     shouldChangeColor(color) {
         if (!color || this.isTransparent(color)) return false;
+
         const hex = this.colorToHex(color);
         if (!hex) return false;
-        const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
-        return allColors.includes(hex);
+
+        return Object.keys(this.colorMappings).includes(hex);
     }
 
     toggleColors() {
@@ -330,10 +337,12 @@ class ColorToggle extends HTMLElement {
 
     applyColorChanges() {
         this.revertColorChanges();
+
         const allElements = document.querySelectorAll('*');
 
         const processElement = (element) => {
             if (!this.shouldProcessElement(element)) return;
+
             const computedStyle = window.getComputedStyle(element);
             const originalStyles = {};
             let hasChanges = false;
@@ -362,9 +371,11 @@ class ColorToggle extends HTMLElement {
 
         allElements.forEach(processElement);
 
-        this.dispatchEvent(new CustomEvent('themeChanged', {
-            detail: { theme: 'dark', isToggled: true }
-        }));
+        this.dispatchEvent(
+            new CustomEvent('themeChanged', {
+                detail: { theme: 'dark', isToggled: true }
+            })
+        );
     }
 
     revertColorChanges() {
@@ -384,9 +395,11 @@ class ColorToggle extends HTMLElement {
         this.modifiedElements.clear();
         this.originalStyles.clear();
 
-        this.dispatchEvent(new CustomEvent('themeChanged', {
-            detail: { theme: 'light', isToggled: false }
-        }));
+        this.dispatchEvent(
+            new CustomEvent('themeChanged', {
+                detail: { theme: 'light', isToggled: false }
+            })
+        );
     }
 
     setTheme(theme) {
@@ -402,7 +415,7 @@ class ColorToggle extends HTMLElement {
     }
 
     getTheme() {
-        return this.isToggled ? 'light' : 'dark';
+        return this.isToggled ? 'dark' : 'light';
     }
 
     refresh() {
