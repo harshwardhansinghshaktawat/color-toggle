@@ -3,80 +3,51 @@ class ColorToggle extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
         this.isToggled = false;
-
-        // Default color mappings (for reference, not applied initially)
-        this.defaultColorMappings = {
-            '#222820': '#FFFFFF',
-            '#424D3F': '#F0F0F0',
-            '#787E76': '#C2C2C2',
-            '#A3A9A1': '#6E6E6E',
-            '#ECECEC': '#000000',
-            '#B8C995': '#1A6AFF',
-            '#618741': '#E0E0E0',
-            '#DAE4C7': '#2A2A2A',
-            '#E9F0DC': '#1A1A1A',
-            '#5C654B': '#F8F8F8',
-            '#798562': '#B0B0B0'
-        };
-
-        // Active color mappings (starts empty to preserve original theme)
-        this.colorMappings = {};
-
-        // Store original styles and modified elements
+        this.colorMappings = {}; // Start empty to preserve original theme
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
-
         this.render();
         this.attachEventListeners();
     }
 
     static get observedAttributes() {
-        return ['originalColors', 'replacementColors'];
+        return ['options'];
     }
 
     attributeChangedCallback(name, oldValue, newValue) {
-        if (newValue && newValue !== oldValue) {
+        if (name === 'options' && newValue && newValue !== oldValue) {
             try {
-                if (name === 'originalColors' || name === 'replacementColors') {
-                    this.updateColorMappings();
-                    if (this.isToggled) {
-                        requestAnimationFrame(() => {
-                            this.applyColorChanges();
-                        });
-                    }
-                }
+                const options = JSON.parse(newValue);
+                // Update colorMappings from originalColors and replacementColors
+                this.updateColorMappings(options.originalColors, options.replacementColors);
+                // Update toggle state
+                this.isToggled = options.isToggled === true || options.isToggled === 'true';
+                this.updateToggleState();
+                // Apply or revert colors based on toggle state
+                requestAnimationFrame(() => {
+                    this.toggleColors();
+                });
             } catch (e) {
-                console.error(`Failed to parse ${name}:`, e);
+                console.error('Error parsing options:', e);
             }
         }
     }
 
-    updateColorMappings() {
+    updateColorMappings(originalColors, replacementColors) {
         this.colorMappings = {};
-
-        let originalColors = [];
-        let replacementColors = [];
-
-        try {
-            const originalColorsAttr = this.getAttribute('originalColors');
-            const replacementColorsAttr = this.getAttribute('replacementColors');
-
-            originalColors = originalColorsAttr ? JSON.parse(originalColorsAttr) : [];
-            replacementColors = replacementColorsAttr ? JSON.parse(replacementColorsAttr) : [];
-        } catch (e) {
-            console.error('Failed to parse color attributes:', e);
-            return;
+        if (originalColors && replacementColors) {
+            const originalArray = originalColors.split(',').map(c => c.trim().toUpperCase());
+            const replacementArray = replacementColors.split(',').map(c => c.trim().toUpperCase());
+            // Pair corresponding colors, ignoring invalid entries
+            originalArray.forEach((orig, index) => {
+                if (this.isValidHex(orig) && this.isValidHex(replacementArray[index])) {
+                    this.colorMappings[orig] = replacementArray[index];
+                }
+            });
         }
-
-        // Validate and pair colors
-        originalColors.forEach((color, index) => {
-            if (this.isValidHexColor(color) && replacementColors[index] && this.isValidHexColor(replacementColors[index])) {
-                this.colorMappings[color.toUpperCase()] = replacementColors[index].toUpperCase();
-            }
-        });
     }
 
-    isValidHexColor(color) {
+    isValidHex(color) {
         return /^#[0-9A-F]{6}$/i.test(color);
     }
 
@@ -87,7 +58,6 @@ class ColorToggle extends HTMLElement {
                     display: inline-block;
                     font-family: Arial, sans-serif;
                 }
-                
                 .toggle-container {
                     display: flex;
                     align-items: center;
@@ -100,11 +70,9 @@ class ColorToggle extends HTMLElement {
                     cursor: pointer;
                     transition: all 0.3s ease;
                 }
-                
                 .toggle-container:hover {
                     background: #e8e8e8;
                 }
-                
                 .toggle-switch {
                     position: relative;
                     width: 50px;
@@ -114,11 +82,9 @@ class ColorToggle extends HTMLElement {
                     transition: background 0.3s ease;
                     cursor: pointer;
                 }
-                
                 .toggle-switch.active {
                     background: #4CAF50;
                 }
-                
                 .toggle-slider {
                     position: absolute;
                     top: 2px;
@@ -130,24 +96,20 @@ class ColorToggle extends HTMLElement {
                     transition: transform 0.3s ease;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
-                
                 .toggle-switch.active .toggle-slider {
                     transform: translateX(25px);
                 }
-                
                 .toggle-label {
                     font-size: 14px;
                     color: #333;
                     font-weight: 500;
                 }
-                
                 .status-indicator {
                     font-size: 12px;
                     color: #666;
                     font-style: italic;
                 }
             </style>
-            
             <div class="toggle-container">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
@@ -165,8 +127,9 @@ class ColorToggle extends HTMLElement {
         const handleToggle = (e) => {
             e.preventDefault();
             e.stopPropagation();
-
             this.isToggled = !this.isToggled;
+            // Update widget property to sync with panel
+            wixWidget.setProps({ isToggled: this.isToggled.toString() });
             this.updateToggleState();
             requestAnimationFrame(() => {
                 this.toggleColors();
@@ -180,53 +143,37 @@ class ColorToggle extends HTMLElement {
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
-
-        if (this.isToggled) {
-            toggleSwitch.classList.add('active');
-            statusIndicator.textContent = 'Dark Mode';
-        } else {
-            toggleSwitch.classList.remove('active');
-            statusIndicator.textContent = 'Light Mode';
-        }
+        toggleSwitch.classList.toggle('active', this.isToggled);
+        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
     }
 
     colorToHex(color) {
         if (!color) return null;
-
         color = color.trim();
         if (color.startsWith('#')) {
             const hex = color.toUpperCase();
             if (hex.length === 4) {
                 return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
             }
-            return hex.length === 7 ? hex : null;
+            return hex;
         }
-
         if (color.startsWith('rgb')) {
             const values = color.match(/\d+/g);
             if (values && values.length >= 3) {
                 const r = parseInt(values[0]);
                 const g = parseInt(values[1]);
                 const b = parseInt(values[2]);
-                return (
-                    '#' +
-                    [r, g, b]
-                        .map(x => {
-                            const hex = x.toString(16);
-                            return hex.length === 1 ? '0' + hex : hex;
-                        })
-                        .join('')
-                        .toUpperCase()
-                );
+                return '#' + [r, g, b].map(x => {
+                    const hex = x.toString(16);
+                    return hex.length === 1 ? '0' + hex : hex;
+                }).join('').toUpperCase();
             }
         }
-
         return null;
     }
 
     isTransparent(color) {
         if (!color) return true;
-
         const normalized = color.toLowerCase().replace(/\s/g, '');
         const transparentValues = [
             'transparent',
@@ -235,9 +182,7 @@ class ColorToggle extends HTMLElement {
             'hsla(0,0%,0%,0)',
             'hsla(0,0%,0%,0.0)'
         ];
-
         if (transparentValues.includes(normalized)) return true;
-
         const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
         return !!alphaMatch;
     }
@@ -261,7 +206,6 @@ class ColorToggle extends HTMLElement {
 
     applyColorMapping(value, isReverse = false) {
         if (!value) return value;
-
         let newValue = value;
         const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
 
@@ -270,8 +214,10 @@ class ColorToggle extends HTMLElement {
             const replacementColor = replacement;
 
             if (originalRgb) {
-                const hexPatterns = [new RegExp(original, 'gi'), new RegExp(original.substring(1), 'gi')];
-
+                const hexPatterns = [
+                    new RegExp(original, 'gi'),
+                    new RegExp(original.substring(1), 'gi')
+                ];
                 hexPatterns.forEach(pattern => {
                     newValue = newValue.replace(pattern, replacementColor);
                 });
@@ -286,7 +232,6 @@ class ColorToggle extends HTMLElement {
                     `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
                     'gi'
                 );
-
                 if (replacement.startsWith('#')) {
                     const replacementRgb = this.hexToRgb(replacement);
                     if (replacementRgb) {
@@ -303,13 +248,11 @@ class ColorToggle extends HTMLElement {
 
     hexToRgb(hex) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-        return result
-            ? {
-                  r: parseInt(result[1], 16),
-                  g: parseInt(result[2], 16),
-                  b: parseInt(result[3], 16)
-              }
-            : null;
+        return result ? {
+            r: parseInt(result[1], 16),
+            g: parseInt(result[2], 16),
+            b: parseInt(result[3], 16)
+        } : null;
     }
 
     getReverseMappings() {
@@ -329,11 +272,10 @@ class ColorToggle extends HTMLElement {
 
     shouldChangeColor(color) {
         if (!color || this.isTransparent(color)) return false;
-
         const hex = this.colorToHex(color);
         if (!hex) return false;
-
-        return Object.keys(this.colorMappings).includes(hex);
+        const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
+        return allColors.includes(hex);
     }
 
     toggleColors() {
@@ -346,12 +288,10 @@ class ColorToggle extends HTMLElement {
 
     applyColorChanges() {
         this.revertColorChanges();
-
         const allElements = document.querySelectorAll('*');
 
         const processElement = (element) => {
             if (!this.shouldProcessElement(element)) return;
-
             const computedStyle = window.getComputedStyle(element);
             const originalStyles = {};
             let hasChanges = false;
@@ -379,19 +319,15 @@ class ColorToggle extends HTMLElement {
         };
 
         allElements.forEach(processElement);
-
-        this.dispatchEvent(
-            new CustomEvent('themeChanged', {
-                detail: { theme: 'dark', isToggled: true }
-            })
-        );
+        this.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme: 'dark', isToggled: true }
+        }));
     }
 
     revertColorChanges() {
         this.modifiedElements.forEach(element => {
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
-
             Object.entries(originalStyles).forEach(([property, originalValue]) => {
                 if (originalValue !== '') {
                     element.style[property] = originalValue;
@@ -400,24 +336,22 @@ class ColorToggle extends HTMLElement {
                 }
             });
         });
-
         this.modifiedElements.clear();
         this.originalStyles.clear();
-
-        this.dispatchEvent(
-            new CustomEvent('themeChanged', {
-                detail: { theme: 'light', isToggled: false }
-            })
-        );
+        this.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme: 'light', isToggled: false }
+        }));
     }
 
     setTheme(theme) {
         if (theme === 'dark' && !this.isToggled) {
             this.isToggled = true;
+            wixWidget.setProps({ isToggled: 'true' });
             this.updateToggleState();
             this.applyColorChanges();
         } else if (theme === 'light' && this.isToggled) {
             this.isToggled = false;
+            wixWidget.setProps({ isToggled: 'false' });
             this.updateToggleState();
             this.revertColorChanges();
         }
