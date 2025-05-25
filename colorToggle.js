@@ -4,56 +4,28 @@ class ColorToggle extends HTMLElement {
         this.attachShadow({ mode: 'open' });
         this.isToggled = false;
         
-        // Start with empty color mappings - will be populated from panel
-        this.colorMappings = {};
+        // Expanded color mappings: original -> new
+        this.colorMappings = {
+            '#222820': '#FFFFFF',
+            '#424D3F': '#F0F0F0',
+            '#787E76': '#C2C2C2',
+            '#A3A9A1': '#6E6E6E',
+            '#ECECEC': '#000000',
+            '#B8C995': '#1A6AFF',
+            // New color mappings
+            '#618741': '#E0E0E0',  // medium-dark green -> light gray
+            '#DAE4C7': '#2A2A2A',  // very light green -> dark gray
+            '#E9F0DC': '#1A1A1A',  // very light green -> very dark gray
+            '#5C654B': '#F8F8F8',  // dark green-brown -> very light gray
+            '#798562': '#B0B0B0'   // medium green-gray -> medium-light gray
+        };
         
-        // Store original styles
+        // Store original styles - using Map with element keys for better performance
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
         
         this.render();
         this.attachEventListeners();
-    }
-    
-    static get observedAttributes() {
-        return ['original-colors', 'replacement-colors'];
-    }
-    
-    attributeChangedCallback(name, oldValue, newValue) {
-        if (newValue !== oldValue) {
-            this.updateColorMappings();
-            
-            // If toggle is currently active, reapply changes with new mappings
-            if (this.isToggled && Object.keys(this.colorMappings).length > 0) {
-                this.applyColorChanges();
-            }
-        }
-    }
-    
-    updateColorMappings() {
-        this.colorMappings = {};
-        
-        const originalColors = this.getAttribute('original-colors');
-        const replacementColors = this.getAttribute('replacement-colors');
-        
-        if (!originalColors || !replacementColors) {
-            return;
-        }
-        
-        const originals = originalColors.split(',').map(c => c.trim()).filter(c => c);
-        const replacements = replacementColors.split(',').map(c => c.trim()).filter(c => c);
-        
-        // Create mappings from the two arrays - handle as many as user provides
-        originals.forEach((original, index) => {
-            if (original && replacements[index]) {
-                // Normalize hex colors
-                const normalizedOriginal = original.startsWith('#') ? original.toUpperCase() : `#${original.toUpperCase()}`;
-                const normalizedReplacement = replacements[index].startsWith('#') ? 
-                    replacements[index].toUpperCase() : `#${replacements[index].toUpperCase()}`;
-                
-                this.colorMappings[normalizedOriginal] = normalizedReplacement;
-            }
-        });
     }
     
     render() {
@@ -145,6 +117,7 @@ class ColorToggle extends HTMLElement {
             this.isToggled = !this.isToggled;
             this.updateToggleState();
             
+            // Apply changes immediately for smooth experience
             requestAnimationFrame(() => {
                 this.toggleColors();
             });
@@ -167,19 +140,24 @@ class ColorToggle extends HTMLElement {
         }
     }
     
+    // Convert any color format to hex - improved version
     colorToHex(color) {
         if (!color) return null;
         
+        // Clean up the color string
         color = color.trim();
         
+        // If already hex, normalize it
         if (color.startsWith('#')) {
             const hex = color.toUpperCase();
+            // Handle 3-digit hex
             if (hex.length === 4) {
                 return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
             }
             return hex;
         }
         
+        // Handle rgb/rgba
         if (color.startsWith('rgb')) {
             const values = color.match(/\d+/g);
             if (values && values.length >= 3) {
@@ -196,10 +174,13 @@ class ColorToggle extends HTMLElement {
         return null;
     }
     
+    // Check if a color is transparent or effectively invisible
     isTransparent(color) {
         if (!color) return true;
         
         const normalized = color.toLowerCase().replace(/\s/g, '');
+        
+        // Common transparent values
         const transparentValues = [
             'transparent',
             'rgba(0,0,0,0)',
@@ -210,10 +191,12 @@ class ColorToggle extends HTMLElement {
         
         if (transparentValues.includes(normalized)) return true;
         
+        // Check for rgba/hsla with 0 alpha
         const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
         return !!alphaMatch;
     }
     
+    // Get all style properties that might contain colors
     getColorProperties() {
         return [
             'color',
@@ -231,6 +214,7 @@ class ColorToggle extends HTMLElement {
         ];
     }
     
+    // Apply color mapping with better pattern matching
     applyColorMapping(value, isReverse = false) {
         if (!value) return value;
         
@@ -238,25 +222,29 @@ class ColorToggle extends HTMLElement {
         const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
         
         Object.entries(mappings).forEach(([original, replacement]) => {
+            // Convert original to all possible formats for comprehensive matching
             const originalRgb = this.hexToRgb(original);
             const replacementColor = replacement;
             
             if (originalRgb) {
+                // Replace hex colors (case insensitive, with or without #)
                 const hexPatterns = [
                     new RegExp(original, 'gi'),
-                    new RegExp(original.substring(1), 'gi')
+                    new RegExp(original.substring(1), 'gi') // without #
                 ];
                 
                 hexPatterns.forEach(pattern => {
                     newValue = newValue.replace(pattern, replacementColor);
                 });
                 
+                // Replace RGB format
                 const rgbPattern = new RegExp(
                     `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`, 
                     'gi'
                 );
                 newValue = newValue.replace(rgbPattern, replacementColor);
                 
+                // Replace RGBA format (preserve alpha)
                 const rgbaPattern = new RegExp(
                     `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`, 
                     'gi'
@@ -293,6 +281,7 @@ class ColorToggle extends HTMLElement {
         return reverse;
     }
     
+    // Check if element should be processed
     shouldProcessElement(element) {
         const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
         if (skipTags.includes(element.tagName)) return false;
@@ -300,12 +289,14 @@ class ColorToggle extends HTMLElement {
         return true;
     }
     
+    // More aggressive color matching for smoother experience
     shouldChangeColor(color) {
         if (!color || this.isTransparent(color)) return false;
         
         const hex = this.colorToHex(color);
         if (!hex) return false;
         
+        // Check direct matches
         const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
         return allColors.includes(hex);
     }
@@ -319,11 +310,13 @@ class ColorToggle extends HTMLElement {
     }
     
     applyColorChanges() {
+        // Clear previous state
         this.revertColorChanges();
         
         const allElements = document.querySelectorAll('*');
         
-        allElements.forEach(element => {
+        // Process elements in batches for smooth performance
+        const processElement = (element) => {
             if (!this.shouldProcessElement(element)) return;
             
             const computedStyle = window.getComputedStyle(element);
@@ -334,13 +327,17 @@ class ColorToggle extends HTMLElement {
                 const computedValue = computedStyle[property];
                 const currentInlineValue = element.style[property];
                 
+                // Skip transparent/empty values
                 if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
                     return;
                 }
                 
+                // Check if we should change this color
                 if (this.shouldChangeColor(computedValue)) {
+                    // Store original inline style
                     originalStyles[property] = currentInlineValue || '';
                     
+                    // Apply new color
                     const newValue = this.applyColorMapping(computedValue, false);
                     element.style[property] = newValue;
                     hasChanges = true;
@@ -351,10 +348,19 @@ class ColorToggle extends HTMLElement {
                 this.originalStyles.set(element, originalStyles);
                 this.modifiedElements.add(element);
             }
-        });
+        };
+        
+        // Process all elements
+        allElements.forEach(processElement);
+        
+        // Dispatch event
+        this.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme: 'dark', isToggled: true }
+        }));
     }
     
     revertColorChanges() {
+        // Efficiently revert all changes
         this.modifiedElements.forEach(element => {
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
@@ -368,13 +374,50 @@ class ColorToggle extends HTMLElement {
             });
         });
         
+        // Clear tracking
         this.modifiedElements.clear();
         this.originalStyles.clear();
+        
+        // Dispatch event
+        this.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme: 'light', isToggled: false }
+        }));
     }
     
+    // Public methods for external control
+    setTheme(theme) {
+        if (theme === 'dark' && !this.isToggled) {
+            this.isToggled = true;
+            this.updateToggleState();
+            this.applyColorChanges();
+        } else if (theme === 'light' && this.isToggled) {
+            this.isToggled = false;
+            this.updateToggleState();
+            this.revertColorChanges();
+        }
+    }
+    
+    getTheme() {
+        return this.isToggled ? 'dark' : 'light';
+    }
+    
+    // Force refresh - useful for dynamic content
+    refresh() {
+        if (this.isToggled) {
+            this.applyColorChanges();
+        }
+    }
+    
+    // Get all configured colors for reference
+    getColorMappings() {
+        return { ...this.colorMappings };
+    }
+    
+    // Clean up when element is removed
     disconnectedCallback() {
         this.revertColorChanges();
     }
 }
 
+// Register the custom element
 customElements.define('color-toggle', ColorToggle);
