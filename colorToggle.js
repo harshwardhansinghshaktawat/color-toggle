@@ -6,6 +6,7 @@ class ColorToggle extends HTMLElement {
         this.colorMappings = {}; // Start empty to preserve original theme
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
+        this.processedStyleSheets = new Set();
         this.render();
         this.attachEventListeners();
     }
@@ -19,7 +20,6 @@ class ColorToggle extends HTMLElement {
             try {
                 const options = JSON.parse(newValue);
                 this.updateColorMappings(options.originalColors, options.replacementColors);
-                // Reapply colors if toggled
                 if (this.isToggled) {
                     requestAnimationFrame(() => {
                         this.applyColorChanges();
@@ -53,45 +53,66 @@ class ColorToggle extends HTMLElement {
             <style>
                 :host {
                     display: inline-block;
+                    font-family: Arial, sans-serif;
                 }
                 .toggle-container {
-                    background: transparent;
-                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                    gap: 10px;
+                    padding: 10px;
+                    background: #f5f5f5;
+                    border-radius: 8px;
+                    border: 1px solid #ddd;
+                    user-select: none;
                     cursor: pointer;
+                    transition: all 0.3s ease;
+                }
+                .toggle-container:hover {
+                    background: #e8e8e8;
                 }
                 .toggle-switch {
                     position: relative;
-                    width: 40px;
-                    height: 20px;
-                    background: transparent;
-                    border: 1px solid #ccc;
-                    border-radius: 20px;
-                    transition: border-color 0.3s ease;
+                    width: 50px;
+                    height: 25px;
+                    background: #ccc;
+                    border-radius: 25px;
+                    transition: background 0.3s ease;
                     cursor: pointer;
                 }
                 .toggle-switch.active {
-                    border-color: #4CAF50;
+                    background: #4CAF50;
                 }
                 .toggle-slider {
                     position: absolute;
-                    top: 1px;
-                    left: 1px;
-                    width: 16px;
-                    height: 16px;
-                    background: #4CAF50;
+                    top: 2px;
+                    left: 2px;
+                    width: 21px;
+                    height: 21px;
+                    background: white;
                     border-radius: 50%;
-                    transition: transform 0.3s ease, background 0.3s ease;
-                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+                    transition: transform 0.3s ease;
+                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
                 .toggle-switch.active .toggle-slider {
-                    transform: translateX(20px);
-                    background: #2196F3;
+                    transform: translateX(25px);
+                }
+                .toggle-label {
+                    font-size: 14px;
+                    color: #333;
+                    font-weight: 500;
+                }
+                .status-indicator {
+                    font-size: 12px;
+                    color: #666;
+                    font-style: italic;
                 }
             </style>
             <div class="toggle-container">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
                 </div>
+                <div class="toggle-label">Theme Toggle</div>
+                <div class="status-indicator" id="statusIndicator">Light Mode</div>
             </div>
         `;
     }
@@ -116,7 +137,9 @@ class ColorToggle extends HTMLElement {
 
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
+        const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
         toggleSwitch.classList.toggle('active', this.isToggled);
+        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
     }
 
     colorToHex(color) {
@@ -127,7 +150,7 @@ class ColorToggle extends HTMLElement {
             if (hex.length === 4) {
                 return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
             }
-            return hex.length === 7 ? hex : null;
+            return hex;
         }
         if (color.startsWith('rgb')) {
             const values = color.match(/\d+/g);
@@ -157,54 +180,29 @@ class ColorToggle extends HTMLElement {
         return [
             'color',
             'backgroundColor',
+            'backgroundImage',
             'borderColor',
             'borderTopColor',
             'borderRightColor',
             'borderBottomColor',
             'borderLeftColor',
+            'borderBlockStartColor',
+            'borderBlockEndColor',
+            'borderInlineStartColor',
+            'borderInlineEndColor',
             'outlineColor',
+            'boxShadow',
+            'textShadow',
+            'textDecorationColor',
+            'caretColor',
+            'accentColor',
             'fill',
-            'stroke'
+            'stroke',
+            'floodColor',
+            'lightingColor',
+            'stopColor',
+            'columnRuleColor'
         ];
-    }
-
-    getAllWebsiteColors() {
-        const colors = new Set();
-        const elements = document.querySelectorAll('*');
-        const colorProps = this.getColorProperties();
-
-        // Check inline and computed styles for elements
-        elements.forEach(element => {
-            const computedStyle = window.getComputedStyle(element);
-            colorProps.forEach(prop => {
-                const value = computedStyle[prop];
-                if (value && !this.isTransparent(value)) {
-                    const hex = this.colorToHex(value);
-                    if (hex) colors.add(hex);
-                }
-            });
-        });
-
-        // Check CSS rules from stylesheets
-        Array.from(document.styleSheets).forEach(sheet => {
-            try {
-                Array.from(sheet.cssRules).forEach(rule => {
-                    if (rule.style) {
-                        colorProps.forEach(prop => {
-                            const value = rule.style[prop];
-                            if (value && !this.isTransparent(value)) {
-                                const hex = this.colorToHex(value);
-                                if (hex) colors.add(hex);
-                            }
-                        });
-                    }
-                });
-            } catch (e) {
-                // Ignore cross-origin stylesheet errors
-            }
-        });
-
-        return Array.from(colors);
     }
 
     applyColorMapping(value, isReverse = false) {
@@ -266,16 +264,70 @@ class ColorToggle extends HTMLElement {
         return reverse;
     }
 
-    shouldProcessElement(element) {
-        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
-        return !skipTags.includes(element.tagName) && element.getRootNode() === document;
+    containsTargetColors(value) {
+        if (!value || this.isTransparent(value)) return false;
+
+        const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
+
+        for (const color of allColors) {
+            if (value.includes(color)) return true;
+
+            const rgb = this.hexToRgb(color);
+            if (rgb) {
+                const rgbString = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
+                const rgbPattern = new RegExp(`rgb\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*\\)`, 'i');
+                if (value.match(rgbPattern)) return true;
+            }
+        }
+
+        return false;
     }
 
-    shouldChangeColor(color) {
-        if (!color || this.isTransparent(color)) return false;
-        const hex = this.colorToHex(color);
-        if (!hex) return false;
-        return Object.keys(this.colorMappings).includes(hex);
+    processCSSVariables() {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const inlineRootStyle = document.documentElement.getAttribute('style') || '';
+
+        const cssVariables = [];
+        for (let i = 0; i < rootStyles.length; i++) {
+            const property = rootStyles[i];
+            if (property.startsWith('--')) {
+                const value = rootStyles.getPropertyValue(property);
+                if (this.containsTargetColors(value)) {
+                    cssVariables.push({ property, value });
+                }
+            }
+        }
+
+        if (cssVariables.length > 0 && !this.originalStyles.has(document.documentElement)) {
+            this.originalStyles.set(document.documentElement, {
+                style: inlineRootStyle,
+                cssVariables: cssVariables.map(v => ({ ...v }))
+            });
+        }
+
+        cssVariables.forEach(({ property, value }) => {
+            const newValue = this.applyColorMapping(value, !this.isToggled);
+            document.documentElement.style.setProperty(property, newValue);
+        });
+    }
+
+    processStyleSheets() {
+        try {
+            Array.from(document.styleSheets).forEach((styleSheet, index) => {
+                try {
+                    if (!styleSheet.href || styleSheet.href.includes(window.location.origin)) {
+                        const sheetId = `stylesheet-${index}`;
+                        if (!this.processedStyleSheets.has(sheetId)) {
+                            this.processedStyleSheets.add(sheetId);
+                        }
+                    }
+                } catch (e) {
+                    // Skip CORS-restricted stylesheets
+                }
+            });
+        } catch (e) {
+            // Skip stylesheet access errors
+        }
     }
 
     toggleColors() {
@@ -288,10 +340,14 @@ class ColorToggle extends HTMLElement {
 
     applyColorChanges() {
         this.revertColorChanges();
+        this.processCSSVariables();
+        this.processStyleSheets();
+
         const allElements = document.querySelectorAll('*');
 
-        const processElement = (element) => {
+        allElements.forEach(element => {
             if (!this.shouldProcessElement(element)) return;
+
             const computedStyle = window.getComputedStyle(element);
             const originalStyles = {};
             let hasChanges = false;
@@ -304,10 +360,33 @@ class ColorToggle extends HTMLElement {
                     return;
                 }
 
-                if (this.shouldChangeColor(computedValue)) {
+                if (this.containsTargetColors(computedValue)) {
                     originalStyles[property] = currentInlineValue || '';
                     const newValue = this.applyColorMapping(computedValue, false);
                     element.style[property] = newValue;
+                    hasChanges = true;
+                }
+            });
+
+            if (element.tagName === 'svg' || element.closest('svg')) {
+                ['fill', 'stroke'].forEach(attr => {
+                    const attrValue = element.getAttribute(attr);
+                    if (attrValue && this.containsTargetColors(attrValue)) {
+                        if (!originalStyles.attributes) originalStyles.attributes = {};
+                        originalStyles.attributes[attr] = attrValue;
+                        const newValue = this.applyColorMapping(attrValue, false);
+                        element.setAttribute(attr, newValue);
+                        hasChanges = true;
+                    }
+                });
+            }
+
+            Array.from(element.attributes).forEach(attr => {
+                if (attr.name.includes('color') && attr.value && this.containsTargetColors(attr.value)) {
+                    if (!originalStyles.attributes) originalStyles.attributes = {};
+                    originalStyles.attributes[attr.name] = attr.value;
+                    const newValue = this.applyColorMapping(attr.value, false);
+                    element.setAttribute(attr.name, newValue);
                     hasChanges = true;
                 }
             });
@@ -316,9 +395,10 @@ class ColorToggle extends HTMLElement {
                 this.originalStyles.set(element, originalStyles);
                 this.modifiedElements.add(element);
             }
-        };
+        });
 
-        allElements.forEach(processElement);
+        this.triggerDynamicElementUpdates();
+
         this.dispatchEvent(new CustomEvent('themeChanged', {
             detail: { theme: 'dark' }
         }));
@@ -328,19 +408,68 @@ class ColorToggle extends HTMLElement {
         this.modifiedElements.forEach(element => {
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
+
             Object.entries(originalStyles).forEach(([property, originalValue]) => {
+                if (property === 'attributes') return;
+                if (property === 'cssVariables') return;
+                if (property === 'style') return;
+
                 if (originalValue !== '') {
                     element.style[property] = originalValue;
                 } else {
                     element.style.removeProperty(property);
                 }
             });
+
+            if (originalStyles.attributes) {
+                Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
+                    element.setAttribute(attr, value);
+                });
+            }
         });
+
+        const rootOriginal = this.originalStyles.get(document.documentElement);
+        if (rootOriginal) {
+            if (rootOriginal.style) {
+                document.documentElement.setAttribute('style', rootOriginal.style);
+            } else {
+                document.documentElement.removeAttribute('style');
+            }
+        }
+
         this.modifiedElements.clear();
         this.originalStyles.clear();
+        this.processedStyleSheets.clear();
+
+        this.triggerDynamicElementUpdates();
+
         this.dispatchEvent(new CustomEvent('themeChanged', {
             detail: { theme: 'light' }
         }));
+    }
+
+    shouldProcessElement(element) {
+        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
+        if (skipTags.includes(element.tagName)) return false;
+        if (element.getRootNode() !== document) return false;
+        return true;
+    }
+
+    triggerDynamicElementUpdates() {
+        window.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new CustomEvent('colorThemeChanged', {
+            detail: { isToggled: this.isToggled }
+        }));
+
+        const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart');
+        customElements.forEach(el => {
+            if (el.refresh && typeof el.refresh === 'function') {
+                el.refresh();
+            }
+            if (el.updateChart && typeof el.updateChart === 'function') {
+                el.updateChart();
+            }
+        });
     }
 
     disconnectedCallback() {
