@@ -3,59 +3,51 @@ class ColorToggle extends HTMLElement {
         super();
         this.attachShadow({ mode: 'open' });
         this.isToggled = false;
-        
-        // Start with empty color mappings - will be populated from panel
-        this.colorMappings = {};
-        
-        // Store original styles
+        this.colorMappings = {}; // Start empty to preserve original theme
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
-        
         this.render();
         this.attachEventListeners();
     }
-    
+
     static get observedAttributes() {
-        return ['data'];
+        return ['options'];
     }
-    
+
     attributeChangedCallback(name, oldValue, newValue) {
-        if (newValue && newValue !== oldValue) {
-            if (name === 'data') {
-                const colorData = JSON.parse(newValue);
-                this.updateColorMappings(colorData);
-                
-                // If toggle is currently active, reapply changes with new mappings
-                if (this.isToggled && Object.keys(this.colorMappings).length > 0) {
-                    this.applyColorChanges();
+        if (name === 'options' && newValue && newValue !== oldValue) {
+            try {
+                const options = JSON.parse(newValue);
+                this.updateColorMappings(options.originalColors, options.replacementColors);
+                // Reapply colors if toggled
+                if (this.isToggled) {
+                    requestAnimationFrame(() => {
+                        this.applyColorChanges();
+                    });
                 }
+            } catch (e) {
+                console.error('Error parsing options:', e);
             }
         }
     }
-    
-    updateColorMappings(colorData) {
+
+    updateColorMappings(originalColors, replacementColors) {
         this.colorMappings = {};
-        
-        if (!colorData.originalColors || !colorData.replacementColors) {
-            return;
+        if (originalColors && replacementColors) {
+            const originalArray = originalColors.split(',').map(c => c.trim().toUpperCase());
+            const replacementArray = replacementColors.split(',').map(c => c.trim().toUpperCase());
+            originalArray.forEach((orig, index) => {
+                if (this.isValidHex(orig) && this.isValidHex(replacementArray[index])) {
+                    this.colorMappings[orig] = replacementArray[index];
+                }
+            });
         }
-        
-        const originals = colorData.originalColors.split(',').map(c => c.trim()).filter(c => c);
-        const replacements = colorData.replacementColors.split(',').map(c => c.trim()).filter(c => c);
-        
-        // Create mappings from the two arrays - handle as many as user provides
-        originals.forEach((original, index) => {
-            if (original && replacements[index]) {
-                // Normalize hex colors
-                const normalizedOriginal = original.startsWith('#') ? original.toUpperCase() : `#${original.toUpperCase()}`;
-                const normalizedReplacement = replacements[index].startsWith('#') ? 
-                    replacements[index].toUpperCase() : `#${replacements[index].toUpperCase()}`;
-                
-                this.colorMappings[normalizedOriginal] = normalizedReplacement;
-            }
-        });
     }
-    
+
+    isValidHex(color) {
+        return /^#[0-9A-F]{6}$/i.test(color);
+    }
+
     render() {
         this.shadowRoot.innerHTML = `
             <style>
@@ -63,7 +55,6 @@ class ColorToggle extends HTMLElement {
                     display: inline-block;
                     font-family: Arial, sans-serif;
                 }
-                
                 .toggle-container {
                     display: flex;
                     align-items: center;
@@ -76,11 +67,9 @@ class ColorToggle extends HTMLElement {
                     cursor: pointer;
                     transition: all 0.3s ease;
                 }
-                
                 .toggle-container:hover {
                     background: #e8e8e8;
                 }
-                
                 .toggle-switch {
                     position: relative;
                     width: 50px;
@@ -90,11 +79,9 @@ class ColorToggle extends HTMLElement {
                     transition: background 0.3s ease;
                     cursor: pointer;
                 }
-                
                 .toggle-switch.active {
                     background: #4CAF50;
                 }
-                
                 .toggle-slider {
                     position: absolute;
                     top: 2px;
@@ -106,24 +93,20 @@ class ColorToggle extends HTMLElement {
                     transition: transform 0.3s ease;
                     box-shadow: 0 2px 4px rgba(0,0,0,0.2);
                 }
-                
                 .toggle-switch.active .toggle-slider {
                     transform: translateX(25px);
                 }
-                
                 .toggle-label {
                     font-size: 14px;
                     color: #333;
                     font-weight: 500;
                 }
-                
                 .status-indicator {
                     font-size: 12px;
                     color: #666;
                     font-style: italic;
                 }
             </style>
-            
             <div class="toggle-container">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
@@ -133,45 +116,35 @@ class ColorToggle extends HTMLElement {
             </div>
         `;
     }
-    
+
     attachEventListeners() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const container = this.shadowRoot.querySelector('.toggle-container');
-        
-        const handleToggle = (e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            
+
+        const handleToggle = (event) => {
+            event.preventDefault();
+            event.stopPropagation();
             this.isToggled = !this.isToggled;
             this.updateToggleState();
-            
             requestAnimationFrame(() => {
                 this.toggleColors();
             });
         };
-        
+
         toggleSwitch.addEventListener('click', handleToggle);
         container.addEventListener('click', handleToggle);
     }
-    
+
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
-        
-        if (this.isToggled) {
-            toggleSwitch.classList.add('active');
-            statusIndicator.textContent = 'Dark Mode';
-        } else {
-            toggleSwitch.classList.remove('active');
-            statusIndicator.textContent = 'Light Mode';
-        }
+        toggleSwitch.classList.toggle('active', this.isToggled);
+        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
     }
-    
+
     colorToHex(color) {
         if (!color) return null;
-        
         color = color.trim();
-        
         if (color.startsWith('#')) {
             const hex = color.toUpperCase();
             if (hex.length === 4) {
@@ -179,7 +152,6 @@ class ColorToggle extends HTMLElement {
             }
             return hex;
         }
-        
         if (color.startsWith('rgb')) {
             const values = color.match(/\d+/g);
             if (values && values.length >= 3) {
@@ -192,28 +164,18 @@ class ColorToggle extends HTMLElement {
                 }).join('').toUpperCase();
             }
         }
-        
         return null;
     }
-    
+
     isTransparent(color) {
         if (!color) return true;
-        
         const normalized = color.toLowerCase().replace(/\s/g, '');
-        const transparentValues = [
-            'transparent',
-            'rgba(0,0,0,0)',
-            'rgba(0,0,0,0.0)',
-            'hsla(0,0%,0%,0)',
-            'hsla(0,0%,0%,0.0)'
-        ];
-        
+        const transparentValues = ['transparent', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.0)', 'hsla(0,0%,0%,0)', 'hsla(0,0%,0%,0.0)'];
         if (transparentValues.includes(normalized)) return true;
-        
         const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
         return !!alphaMatch;
     }
-    
+
     getColorProperties() {
         return [
             'color',
@@ -230,38 +192,35 @@ class ColorToggle extends HTMLElement {
             'stroke'
         ];
     }
-    
+
     applyColorMapping(value, isReverse = false) {
         if (!value) return value;
-        
         let newValue = value;
         const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
-        
+
         Object.entries(mappings).forEach(([original, replacement]) => {
             const originalRgb = this.hexToRgb(original);
             const replacementColor = replacement;
-            
+
             if (originalRgb) {
                 const hexPatterns = [
                     new RegExp(original, 'gi'),
                     new RegExp(original.substring(1), 'gi')
                 ];
-                
                 hexPatterns.forEach(pattern => {
                     newValue = newValue.replace(pattern, replacementColor);
                 });
-                
+
                 const rgbPattern = new RegExp(
-                    `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`, 
+                    `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`,
                     'gi'
                 );
                 newValue = newValue.replace(rgbPattern, replacementColor);
-                
+
                 const rgbaPattern = new RegExp(
-                    `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`, 
+                    `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
                     'gi'
                 );
-                
                 if (replacement.startsWith('#')) {
                     const replacementRgb = this.hexToRgb(replacement);
                     if (replacementRgb) {
@@ -272,10 +231,10 @@ class ColorToggle extends HTMLElement {
                 }
             }
         });
-        
+
         return newValue;
     }
-    
+
     hexToRgb(hex) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         return result ? {
@@ -284,7 +243,7 @@ class ColorToggle extends HTMLElement {
             b: parseInt(result[3], 16)
         } : null;
     }
-    
+
     getReverseMappings() {
         const reverse = {};
         Object.entries(this.colorMappings).forEach(([key, value]) => {
@@ -292,24 +251,22 @@ class ColorToggle extends HTMLElement {
         });
         return reverse;
     }
-    
+
     shouldProcessElement(element) {
         const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
         if (skipTags.includes(element.tagName)) return false;
         if (element.getRootNode() !== document) return false;
         return true;
     }
-    
+
     shouldChangeColor(color) {
         if (!color || this.isTransparent(color)) return false;
-        
         const hex = this.colorToHex(color);
         if (!hex) return false;
-        
         const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
         return allColors.includes(hex);
     }
-    
+
     toggleColors() {
         if (this.isToggled) {
             this.applyColorChanges();
@@ -317,48 +274,49 @@ class ColorToggle extends HTMLElement {
             this.revertColorChanges();
         }
     }
-    
+
     applyColorChanges() {
         this.revertColorChanges();
-        
         const allElements = document.querySelectorAll('*');
-        
-        allElements.forEach(element => {
+
+        const processElement = (element) => {
             if (!this.shouldProcessElement(element)) return;
-            
             const computedStyle = window.getComputedStyle(element);
             const originalStyles = {};
             let hasChanges = false;
-            
+
             this.getColorProperties().forEach(property => {
                 const computedValue = computedStyle[property];
                 const currentInlineValue = element.style[property];
-                
+
                 if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
                     return;
                 }
-                
+
                 if (this.shouldChangeColor(computedValue)) {
                     originalStyles[property] = currentInlineValue || '';
-                    
                     const newValue = this.applyColorMapping(computedValue, false);
                     element.style[property] = newValue;
                     hasChanges = true;
                 }
             });
-            
+
             if (hasChanges) {
                 this.originalStyles.set(element, originalStyles);
                 this.modifiedElements.add(element);
             }
-        });
+        };
+
+        allElements.forEach(processElement);
+        this.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme: 'dark' }
+        }));
     }
-    
+
     revertColorChanges() {
         this.modifiedElements.forEach(element => {
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
-            
             Object.entries(originalStyles).forEach(([property, originalValue]) => {
                 if (originalValue !== '') {
                     element.style[property] = originalValue;
@@ -367,11 +325,13 @@ class ColorToggle extends HTMLElement {
                 }
             });
         });
-        
         this.modifiedElements.clear();
         this.originalStyles.clear();
+        this.dispatchEvent(new CustomEvent('themeChanged', {
+            detail: { theme: 'light' }
+        }));
     }
-    
+
     disconnectedCallback() {
         this.revertColorChanges();
     }
