@@ -53,66 +53,45 @@ class ColorToggle extends HTMLElement {
             <style>
                 :host {
                     display: inline-block;
-                    font-family: Arial, sans-serif;
                 }
                 .toggle-container {
-                    display: flex;
-                    align-items: center;
-                    gap: 10px;
-                    padding: 10px;
-                    background: #f5f5f5;
-                    border-radius: 8px;
-                    border: 1px solid #ddd;
-                    user-select: none;
+                    background: transparent;
+                    padding: 0;
                     cursor: pointer;
-                    transition: all 0.3s ease;
-                }
-                .toggle-container:hover {
-                    background: #e8e8e8;
                 }
                 .toggle-switch {
                     position: relative;
-                    width: 50px;
-                    height: 25px;
-                    background: #ccc;
-                    border-radius: 25px;
-                    transition: background 0.3s ease;
+                    width: 40px;
+                    height: 20px;
+                    background: transparent;
+                    border: 1px solid #ccc;
+                    border-radius: 20px;
+                    transition: border-color 0.3s ease;
                     cursor: pointer;
                 }
                 .toggle-switch.active {
-                    background: #4CAF50;
+                    border-color: #4CAF50;
                 }
                 .toggle-slider {
                     position: absolute;
-                    top: 2px;
-                    left: 2px;
-                    width: 21px;
-                    height: 21px;
-                    background: white;
+                    top: 1px;
+                    left: 1px;
+                    width: 16px;
+                    height: 16px;
+                    background: #4CAF50;
                     border-radius: 50%;
-                    transition: transform 0.3s ease;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    transition: transform 0.3s ease, background 0.3s ease;
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
                 }
                 .toggle-switch.active .toggle-slider {
-                    transform: translateX(25px);
-                }
-                .toggle-label {
-                    font-size: 14px;
-                    color: #333;
-                    font-weight: 500;
-                }
-                .status-indicator {
-                    font-size: 12px;
-                    color: #666;
-                    font-style: italic;
+                    transform: translateX(20px);
+                    background: #2196F3;
                 }
             </style>
             <div class="toggle-container">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
                 </div>
-                <div class="toggle-label">Theme Toggle</div>
-                <div class="status-indicator" id="statusIndicator">Light Mode</div>
             </div>
         `;
     }
@@ -137,9 +116,7 @@ class ColorToggle extends HTMLElement {
 
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
-        const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
         toggleSwitch.classList.toggle('active', this.isToggled);
-        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
     }
 
     colorToHex(color) {
@@ -150,7 +127,7 @@ class ColorToggle extends HTMLElement {
             if (hex.length === 4) {
                 return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
             }
-            return hex;
+            return hex.length === 7 ? hex : null;
         }
         if (color.startsWith('rgb')) {
             const values = color.match(/\d+/g);
@@ -186,11 +163,48 @@ class ColorToggle extends HTMLElement {
             'borderBottomColor',
             'borderLeftColor',
             'outlineColor',
-            'boxShadow',
-            'textShadow',
             'fill',
             'stroke'
         ];
+    }
+
+    getAllWebsiteColors() {
+        const colors = new Set();
+        const elements = document.querySelectorAll('*');
+        const colorProps = this.getColorProperties();
+
+        // Check inline and computed styles for elements
+        elements.forEach(element => {
+            const computedStyle = window.getComputedStyle(element);
+            colorProps.forEach(prop => {
+                const value = computedStyle[prop];
+                if (value && !this.isTransparent(value)) {
+                    const hex = this.colorToHex(value);
+                    if (hex) colors.add(hex);
+                }
+            });
+        });
+
+        // Check CSS rules from stylesheets
+        Array.from(document.styleSheets).forEach(sheet => {
+            try {
+                Array.from(sheet.cssRules).forEach(rule => {
+                    if (rule.style) {
+                        colorProps.forEach(prop => {
+                            const value = rule.style[prop];
+                            if (value && !this.isTransparent(value)) {
+                                const hex = this.colorToHex(value);
+                                if (hex) colors.add(hex);
+                            }
+                        });
+                    }
+                });
+            } catch (e) {
+                // Ignore cross-origin stylesheet errors
+            }
+        });
+
+        return Array.from(colors);
     }
 
     applyColorMapping(value, isReverse = false) {
@@ -254,17 +268,14 @@ class ColorToggle extends HTMLElement {
 
     shouldProcessElement(element) {
         const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
-        if (skipTags.includes(element.tagName)) return false;
-        if (element.getRootNode() !== document) return false;
-        return true;
+        return !skipTags.includes(element.tagName) && element.getRootNode() === document;
     }
 
     shouldChangeColor(color) {
         if (!color || this.isTransparent(color)) return false;
         const hex = this.colorToHex(color);
         if (!hex) return false;
-        const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
-        return allColors.includes(hex);
+        return Object.keys(this.colorMappings).includes(hex);
     }
 
     toggleColors() {
