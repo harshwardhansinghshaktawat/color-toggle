@@ -20,9 +20,6 @@ class ColorToggle extends HTMLElement {
                 const options = JSON.parse(newValue);
                 // Update colorMappings from originalColors and replacementColors
                 this.updateColorMappings(options.originalColors, options.replacementColors);
-                // Update toggle state
-                this.isToggled = options.isToggled === true || options.isToggled === 'true';
-                this.updateToggleState();
                 // Apply or revert colors based on toggle state
                 requestAnimationFrame(() => {
                     this.toggleColors();
@@ -128,7 +125,7 @@ class ColorToggle extends HTMLElement {
             e.preventDefault();
             e.stopPropagation();
             this.isToggled = !this.isToggled;
-            // Update widget property to sync with panel
+            // Update widget property
             wixWidget.setProps({ isToggled: this.isToggled.toString() });
             this.updateToggleState();
             requestAnimationFrame(() => {
