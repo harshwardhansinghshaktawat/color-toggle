@@ -373,7 +373,7 @@ class ColorToggle extends HTMLElement {
             const property = rootStyles[i];
             if (property.startsWith('--')) {
                 const value = rootStyles.getPropertyValue(property).trim();
-                if (this.containsTargetColors(value)) {
+                if (this.containsTargetColors(value) || this.isColorLikeValue(value)) {
                     cssVariables.push({ property, value });
                 }
             }
@@ -505,7 +505,7 @@ class ColorToggle extends HTMLElement {
                 }
 
                 if (this.containsTargetColors(computedValue)) {
-                    originalStyles[property] = currentInlineValue || '';
+                    originalStyles[property] = currentInlineValue || computedValue; // Store computed value if no inline style
                     const newValue = this.applyColorMapping(computedValue, false);
                     element.style[property] = newValue;
                     hasChanges = true;
@@ -579,37 +579,52 @@ class ColorToggle extends HTMLElement {
     }
 
     revertColorChanges() {
+        console.log('Reverting color changes...');
         this.modifiedElements.forEach(element => {
             const originalStyles = this.originalStyles.get(element);
-            if (!originalStyles) return;
+            if (!originalStyles) {
+                console.warn('No original styles found for element:', element);
+                return;
+            }
 
+            // Revert CSS properties
             Object.entries(originalStyles).forEach(([property, originalValue]) => {
-                if (property === 'attributes') return;
-                if (property === 'cssVariables') return;
-                if (property === 'style') return;
-                if (property === 'inlineStyle') return;
+                if (property === 'attributes' || property === 'cssVariables' || property === 'style' || property === 'inlineStyle') return;
 
-                if (originalValue !== '') {
+                console.log(`Restoring ${property} on element`, element, 'to', originalValue);
+                if (originalValue && originalValue !== '') {
                     element.style[property] = originalValue;
                 } else {
                     element.style.removeProperty(property);
                 }
             });
 
+            // Revert attributes
             if (originalStyles.attributes) {
                 Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
+                    console.log(`Restoring attribute ${attr} to`, value);
                     element.setAttribute(attr, value);
                 });
             }
 
+            // Revert inline styles
             if (originalStyles.inlineStyle !== undefined) {
-                element.style.cssText = originalStyles.inlineStyle;
+                console.log('Restoring inline style to', originalStyles.inlineStyle);
+                element.style.cssText = originalStyles.inlineStyle || '';
             }
         });
 
+        // Revert CSS variables
         const rootOriginal = this.originalStyles.get(document.documentElement);
         if (rootOriginal) {
+            if (rootOriginal.cssVariables) {
+                rootOriginal.cssVariables.forEach(({ property, value }) => {
+                    console.log(`Restoring CSS variable ${property} to`, value);
+                    document.documentElement.style.setProperty(property, value);
+                });
+            }
             if (rootOriginal.style) {
+                console.log('Restoring root inline style to', rootOriginal.style);
                 document.documentElement.setAttribute('style', rootOriginal.style);
             } else {
                 document.documentElement.removeAttribute('style');
@@ -635,17 +650,20 @@ class ColorToggle extends HTMLElement {
     }
 
     triggerDynamicElementUpdates() {
+        console.log('Triggering dynamic element updates...');
         window.dispatchEvent(new Event('resize'));
         window.dispatchEvent(new CustomEvent('colorThemeChanged', {
             detail: { isToggled: this.isToggled }
         }));
 
-        const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart');
+        const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart, [style], [class]');
         customElements.forEach(el => {
             if (el.refresh && typeof el.refresh === 'function') {
+                console.log('Refreshing element:', el);
                 el.refresh();
             }
             if (el.updateChart && typeof el.updateChart === 'function') {
+                console.log('Updating chart:', el);
                 el.updateChart();
             }
         });
