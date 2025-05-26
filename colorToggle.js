@@ -21,7 +21,9 @@ class ColorToggle extends HTMLElement {
                 const options = JSON.parse(newValue);
                 this.updateColorMappings(options.originalColors, options.replacementColors);
                 if (this.isToggled) {
-                    requestAnimationFrame(() => this.applyColorChanges());
+                    requestAnimationFrame(() => {
+                        this.applyColorChanges();
+                    });
                 }
             } catch (e) {
                 console.error('Error parsing options:', e);
@@ -124,7 +126,9 @@ class ColorToggle extends HTMLElement {
             event.stopPropagation();
             this.isToggled = !this.isToggled;
             this.updateToggleState();
-            requestAnimationFrame(() => this.toggleColors());
+            requestAnimationFrame(() => {
+                this.toggleColors();
+            });
         };
 
         toggleSwitch.addEventListener('click', handleToggle);
@@ -143,7 +147,9 @@ class ColorToggle extends HTMLElement {
         color = color.trim();
         if (color.startsWith('#')) {
             const hex = color.toUpperCase();
-            if (hex.length === 4) return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+            if (hex.length === 4) {
+                return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
+            }
             return hex;
         }
         if (color.startsWith('rgb')) {
@@ -358,7 +364,7 @@ class ColorToggle extends HTMLElement {
         return false;
     }
 
-    processCSSVariables(isRevert = false) {
+    processCSSVariables() {
         const rootStyles = getComputedStyle(document.documentElement);
         const inlineRootStyle = document.documentElement.getAttribute('style') || '';
 
@@ -411,7 +417,7 @@ class ColorToggle extends HTMLElement {
             }
         });
 
-        if (!isRevert && cssVariables.length > 0 && !this.originalStyles.has(document.documentElement)) {
+        if (cssVariables.length > 0 && !this.originalStyles.has(document.documentElement)) {
             this.originalStyles.set(document.documentElement, {
                 style: inlineRootStyle,
                 cssVariables: cssVariables.map(v => ({ ...v }))
@@ -419,7 +425,7 @@ class ColorToggle extends HTMLElement {
         }
 
         cssVariables.forEach(({ property, value }) => {
-            const newValue = isRevert ? value : this.applyColorMapping(value, isRevert);
+            const newValue = this.applyColorMapping(value, !this.isToggled);
             document.documentElement.style.setProperty(property, newValue);
         });
     }
@@ -499,7 +505,7 @@ class ColorToggle extends HTMLElement {
                 }
 
                 if (this.containsTargetColors(computedValue)) {
-                    originalStyles[property] = computedValue; // Store computed value
+                    originalStyles[property] = currentInlineValue || '';
                     const newValue = this.applyColorMapping(computedValue, false);
                     element.style[property] = newValue;
                     hasChanges = true;
@@ -550,7 +556,9 @@ class ColorToggle extends HTMLElement {
                 if (this.containsTargetColors(inlineStyle)) {
                     const newInlineStyle = this.applyColorMapping(inlineStyle, false);
                     if (newInlineStyle !== inlineStyle) {
-                        originalStyles.inlineStyle = inlineStyle;
+                        if (!originalStyles.inlineStyle) {
+                            originalStyles.inlineStyle = inlineStyle;
+                        }
                         element.style.cssText = newInlineStyle;
                         hasChanges = true;
                     }
@@ -575,10 +583,15 @@ class ColorToggle extends HTMLElement {
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
 
-            this.getColorProperties().forEach(property => {
-                if (originalStyles[property]) {
-                    element.style[property] = originalStyles[property];
-                } else if (property.startsWith('--')) {
+            Object.entries(originalStyles).forEach(([property, originalValue]) => {
+                if (property === 'attributes') return;
+                if (property === 'cssVariables') return;
+                if (property === 'style') return;
+                if (property === 'inlineStyle') return;
+
+                if (originalValue !== '') {
+                    element.style[property] = originalValue;
+                } else {
                     element.style.removeProperty(property);
                 }
             });
@@ -593,8 +606,6 @@ class ColorToggle extends HTMLElement {
                 element.style.cssText = originalStyles.inlineStyle;
             }
         });
-
-        this.processCSSVariables(true);
 
         const rootOriginal = this.originalStyles.get(document.documentElement);
         if (rootOriginal) {
