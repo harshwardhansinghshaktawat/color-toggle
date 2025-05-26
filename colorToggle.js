@@ -201,18 +201,7 @@ class ColorToggle extends HTMLElement {
             'floodColor',
             'lightingColor',
             'stopColor',
-            'columnRuleColor',
-            'scrollbarColor',
-            'borderImageSource',
-            'maskImage',
-            'clipPath',
-            '--bg-gradient',
-            '--bg-overlay-color',
-            '--backgroundColor',
-            '--borderColor',
-            '--color',
-            '--fill',
-            '--stroke'
+            'columnRuleColor'
         ];
     }
 
@@ -223,55 +212,34 @@ class ColorToggle extends HTMLElement {
 
         Object.entries(mappings).forEach(([original, replacement]) => {
             const originalRgb = this.hexToRgb(original);
-            const replacementRgb = this.hexToRgb(replacement);
+            const replacementColor = replacement;
 
-            if (originalRgb && replacementRgb) {
+            if (originalRgb) {
                 const hexPatterns = [
                     new RegExp(original, 'gi'),
                     new RegExp(original.substring(1), 'gi')
                 ];
                 hexPatterns.forEach(pattern => {
-                    newValue = newValue.replace(pattern, replacement);
+                    newValue = newValue.replace(pattern, replacementColor);
                 });
 
                 const rgbPattern = new RegExp(
                     `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`,
                     'gi'
                 );
-                newValue = newValue.replace(rgbPattern, replacement);
+                newValue = newValue.replace(rgbPattern, replacementColor);
 
                 const rgbaPattern = new RegExp(
                     `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
                     'gi'
                 );
-                newValue = newValue.replace(rgbaPattern, (match, alpha) => {
-                    return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
-                });
-
-                const bareRgbPattern = new RegExp(
-                    `\\b${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\b`,
-                    'g'
-                );
-                newValue = newValue.replace(bareRgbPattern, `${replacementRgb.r},${replacementRgb.g},${replacementRgb.b}`);
-
-                const rgbWithOpacityPattern = new RegExp(
-                    `\\b${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([0-9]*\\.?[0-9]+)\\b`,
-                    'g'
-                );
-                newValue = newValue.replace(rgbWithOpacityPattern, (match, opacity) => {
-                    return `${replacementRgb.r},${replacementRgb.g},${replacementRgb.b},${opacity}`;
-                });
-
-                const originalHsl = this.hexToHsl(original);
-                const replacementHsl = this.hexToHsl(replacement);
-                if (originalHsl && replacementHsl) {
-                    const hslPattern = new RegExp(
-                        `hsl\\(\\s*${Math.round(originalHsl.h)}\\s*,\\s*${Math.round(originalHsl.s)}%\\s*,\\s*${Math.round(originalHsl.l)}%\\s*\\)`,
-                        'gi'
-                    );
-                    newValue = newValue.replace(hslPattern,
-                        `hsl(${Math.round(replacementHsl.h)}, ${Math.round(replacementHsl.s)}%, ${Math.round(replacementHsl.l)}%)`
-                    );
+                if (replacement.startsWith('#')) {
+                    const replacementRgb = this.hexToRgb(replacement);
+                    if (replacementRgb) {
+                        newValue = newValue.replace(rgbaPattern, (match, alpha) => {
+                            return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
+                        });
+                    }
                 }
             }
         });
@@ -286,38 +254,6 @@ class ColorToggle extends HTMLElement {
             g: parseInt(result[2], 16),
             b: parseInt(result[3], 16)
         } : null;
-    }
-
-    hexToHsl(hex) {
-        const rgb = this.hexToRgb(hex);
-        if (!rgb) return null;
-
-        const r = rgb.r / 255;
-        const g = rgb.g / 255;
-        const b = rgb.b / 255;
-
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        let h, s, l = (max + min) / 2;
-
-        if (max === min) {
-            h = s = 0;
-        } else {
-            const d = max - min;
-            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            switch (max) {
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                case g: h = (b - r) / d + 2; break;
-                case b: h = (r - g) / d + 4; break;
-            }
-            h /= 6;
-        }
-
-        return {
-            h: h * 360,
-            s: s * 100,
-            l: l * 100
-        };
     }
 
     getReverseMappings() {
@@ -338,26 +274,9 @@ class ColorToggle extends HTMLElement {
 
             const rgb = this.hexToRgb(color);
             if (rgb) {
+                const rgbString = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
                 const rgbPattern = new RegExp(`rgb\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*\\)`, 'i');
                 if (value.match(rgbPattern)) return true;
-
-                const rgbaPattern = new RegExp(`rgba\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,`, 'i');
-                if (value.match(rgbaPattern)) return true;
-
-                const bareRgbPattern = new RegExp(`\\b${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\b`);
-                if (value.match(bareRgbPattern)) return true;
-
-                const rgbOpacityPattern = new RegExp(`\\b${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,\\s*[0-9]*\\.?[0-9]+\\b`);
-                if (value.match(rgbOpacityPattern)) return true;
-
-                const hsl = this.hexToHsl(color);
-                if (hsl) {
-                    const hslPattern = new RegExp(
-                        `hsl\\(\\s*${Math.round(hsl.h)}\\s*,\\s*${Math.round(hsl.s)}%\\s*,\\s*${Math.round(hsl.l)}%\\s*\\)`,
-                        'i'
-                    );
-                    if (value.match(hslPattern)) return true;
-                }
             }
         }
 
@@ -372,50 +291,12 @@ class ColorToggle extends HTMLElement {
         for (let i = 0; i < rootStyles.length; i++) {
             const property = rootStyles[i];
             if (property.startsWith('--')) {
-                const value = rootStyles.getPropertyValue(property).trim();
+                const value = rootStyles.getPropertyValue(property);
                 if (this.containsTargetColors(value)) {
                     cssVariables.push({ property, value });
                 }
             }
         }
-
-        const wixColorPatterns = [
-            /^--wix-color-\d+$/,
-            /^--.*[Cc]olor.*$/,
-            /^--.*[Bb]ackground.*$/,
-            /^--.*[Bb]order.*$/,
-            /^--.*[Ff]ill.*$/,
-            /^--.*[Ss]troke.*$/,
-            /^--bg-.*$/,
-            /^--.*-rgb$/,
-            /^--.*-opacity-and-color$/,
-            /^--shc-mutated-brightness$/,
-            /^--backgroundColor$/,
-            /^--borderColor$/,
-            /^--shadowColor$/
-        ];
-
-        const allComputedVars = Array.from(document.styleSheets)
-            .flatMap(sheet => {
-                try {
-                    return Array.from(sheet.cssRules || []);
-                } catch (e) {
-                    return [];
-                }
-            })
-            .filter(rule => rule.type === CSSRule.STYLE_RULE)
-            .flatMap(rule => Array.from(rule.style))
-            .filter(prop => prop.startsWith('--'))
-            .filter(prop => wixColorPatterns.some(pattern => pattern.test(prop)));
-
-        allComputedVars.forEach(property => {
-            const value = rootStyles.getPropertyValue(property).trim();
-            if (value && !cssVariables.some(v => v.property === property)) {
-                if (this.isColorLikeValue(value)) {
-                    cssVariables.push({ property, value });
-                }
-            }
-        });
 
         if (cssVariables.length > 0 && !this.originalStyles.has(document.documentElement)) {
             this.originalStyles.set(document.documentElement, {
@@ -428,31 +309,6 @@ class ColorToggle extends HTMLElement {
             const newValue = this.applyColorMapping(value, !this.isToggled);
             document.documentElement.style.setProperty(property, newValue);
         });
-    }
-
-    isColorLikeValue(value) {
-        if (!value) return false;
-
-        const colorPatterns = [
-            /#([0-9a-f]{3}|[0-9a-f]{6})/i,
-            /rgb\s*\(/i,
-            /rgba\s*\(/i,
-            /hsl\s*\(/i,
-            /hsla\s*\(/i,
-            /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/,
-            /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*$/,
-            /linear-gradient|radial-gradient/i,
-            /transparent|currentcolor/i
-        ];
-
-        return colorPatterns.some(pattern => pattern.test(value)) ||
-               this.containsTargetColors(value) ||
-               this.isMutatedBrightnessValue(value);
-    }
-
-    isMutatedBrightnessValue(value) {
-        const brightnessPattern = /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/;
-        return brightnessPattern.test(value);
     }
 
     processStyleSheets() {
@@ -513,7 +369,7 @@ class ColorToggle extends HTMLElement {
             });
 
             if (element.tagName === 'svg' || element.closest('svg')) {
-                ['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color'].forEach(attr => {
+                ['fill', 'stroke'].forEach(attr => {
                     const attrValue = element.getAttribute(attr);
                     if (attrValue && this.containsTargetColors(attrValue)) {
                         if (!originalStyles.attributes) originalStyles.attributes = {};
@@ -523,26 +379,10 @@ class ColorToggle extends HTMLElement {
                         hasChanges = true;
                     }
                 });
-
-                ['fill-opacity', 'stroke-opacity'].forEach(attr => {
-                    const attrValue = element.getAttribute(attr);
-                    if (attrValue && parseFloat(attrValue) === 0) {
-                        return;
-                    }
-                });
             }
 
             Array.from(element.attributes).forEach(attr => {
-                const colorAttrPatterns = [
-                    /color/i,
-                    /background/i,
-                    /border/i,
-                    /fill/i,
-                    /stroke/i,
-                    /shadow/i
-                ];
-                const isColorAttr = colorAttrPatterns.some(pattern => pattern.test(attr.name));
-                if (isColorAttr && attr.value && this.containsTargetColors(attr.value)) {
+                if (attr.name.includes('color') && attr.value && this.containsTargetColors(attr.value)) {
                     if (!originalStyles.attributes) originalStyles.attributes = {};
                     originalStyles.attributes[attr.name] = attr.value;
                     const newValue = this.applyColorMapping(attr.value, false);
@@ -550,20 +390,6 @@ class ColorToggle extends HTMLElement {
                     hasChanges = true;
                 }
             });
-
-            if (element.style && element.style.cssText) {
-                const inlineStyle = element.style.cssText;
-                if (this.containsTargetColors(inlineStyle)) {
-                    const newInlineStyle = this.applyColorMapping(inlineStyle, false);
-                    if (newInlineStyle !== inlineStyle) {
-                        if (!originalStyles.inlineStyle) {
-                            originalStyles.inlineStyle = inlineStyle;
-                        }
-                        element.style.cssText = newInlineStyle;
-                        hasChanges = true;
-                    }
-                }
-            }
 
             if (hasChanges) {
                 this.originalStyles.set(element, originalStyles);
@@ -587,7 +413,6 @@ class ColorToggle extends HTMLElement {
                 if (property === 'attributes') return;
                 if (property === 'cssVariables') return;
                 if (property === 'style') return;
-                if (property === 'inlineStyle') return;
 
                 if (originalValue !== '') {
                     element.style[property] = originalValue;
@@ -600,10 +425,6 @@ class ColorToggle extends HTMLElement {
                 Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
                     element.setAttribute(attr, value);
                 });
-            }
-
-            if (originalStyles.inlineStyle !== undefined) {
-                element.style.cssText = originalStyles.inlineStyle;
             }
         });
 
