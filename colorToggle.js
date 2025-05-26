@@ -52,30 +52,41 @@ class ColorToggle extends HTMLElement {
                 :host {
                     display: inline-block;
                     font-family: Arial, sans-serif;
+                    position: relative;
+                    visibility: visible;
+                    opacity: 1;
+                    z-index: 1;
                 }
                 .toggle-container {
                     display: flex;
                     align-items: center;
-                    gap: 10px;
-                    padding: 10px;
+                    gap: 12px;
+                    padding: 12px;
                     background: #f5f5f5;
                     border-radius: 8px;
-                    border: 1px solid #ddd;
+                    border: 1px solid #d1d1d1;
                     user-select: none;
                     cursor: pointer;
-                    transition: all 0.3s ease;
+                    transition: background 0.3s ease;
+                    min-width: 150px;
+                    box-sizing: border-box;
+                    opacity: 1;
+                    visibility: visible;
                 }
                 .toggle-container:hover {
-                    background: #e8e8e8;
+                    background: #e0e0e0;
                 }
                 .toggle-switch {
                     position: relative;
                     width: 50px;
-                    height: 25px;
-                    background: #ccc;
-                    border-radius: 25px;
+                    height: 24px;
+                    background: #b0b0b0;
+                    border-radius: 12px;
                     transition: background 0.3s ease;
-                    cursor: pointer;
+                    flex-shrink: 0;
+                    display: block;
+                    opacity: 1;
+                    visibility: visible;
                 }
                 .toggle-switch.active {
                     background: #4CAF50;
@@ -84,33 +95,38 @@ class ColorToggle extends HTMLElement {
                     position: absolute;
                     top: 2px;
                     left: 2px;
-                    width: 21px;
-                    height: 21px;
-                    background: white;
+                    width: 20px;
+                    height: 20px;
+                    background: #ffffff;
                     border-radius: 50%;
                     transition: transform 0.3s ease;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+                    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+                    display: block;
+                    opacity: 1;
+                    visibility: visible;
                 }
                 .toggle-switch.active .toggle-slider {
-                    transform: translateX(25px);
+                    transform: translateX(26px);
                 }
                 .toggle-label {
                     font-size: 14px;
-                    color: #333;
+                    color: #333333;
                     font-weight: 500;
+                    flex-grow: 1;
                 }
                 .status-indicator {
                     font-size: 12px;
-                    color: #666;
+                    color: #666666;
                     font-style: italic;
+                    display: none; /* Hidden to simplify UI; can be re-enabled if needed */
                 }
             </style>
-            <div class="toggle-container">
+            <div class="toggle-container" role="switch" aria-label="Theme Toggle">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
                 </div>
-                <div class="toggle-label">Theme Toggle</div>
-                <div class="status-indicator" id="statusIndicator">Light Mode</div>
+                <span class="toggle-label">Theme Toggle</span>
+                <span class="status-indicator">Light Mode</span>
             </div>
         `;
     }
@@ -118,6 +134,11 @@ class ColorToggle extends HTMLElement {
     attachEventListeners() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const container = this.shadowRoot.querySelector('.toggle-container');
+
+        if (!toggleSwitch || !container) {
+            console.error('Toggle switch or container not found in shadow DOM');
+            return;
+        }
 
         const handleToggle = (event) => {
             event.preventDefault();
@@ -137,7 +158,11 @@ class ColorToggle extends HTMLElement {
 
     updateToggleState(theme) {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
-        const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
+        const statusIndicator = this.shadowRoot.querySelector('.status-indicator');
+        if (!toggleSwitch || !statusIndicator) {
+            console.error('Toggle switch or status indicator not found');
+            return;
+        }
         this.currentTheme = theme;
         toggleSwitch.classList.toggle('active', theme === 'dark');
         statusIndicator.textContent = theme === 'dark' ? 'Dark Mode' : 'Light Mode';
@@ -532,15 +557,14 @@ class ColorToggle extends HTMLElement {
 
             Array.from(element.attributes).forEach(attr => {
                 const colorAttrPatterns = [
-                    /color/i,
-                    /background/i,
-                    /border/i,
-                    /fill/i,
-                    /stroke/i,
+                    /color/,
+                    /background/,
+                    /border/,
+                    /fill/,
+                    /stroke/,
                     /shadow/i
                 ];
-                const isColorAttr = colorAttrPatterns.some(pattern => pattern.test(attr.name));
-                if (isColorAttr && attr.value && this.containsTargetColors(attr.value)) {
+                if (colorAttrPatterns.some(pattern => pattern.test(attr.name)) && attr.value && this.containsTargetColors(attr.value)) {
                     if (!originalStyles.attributes) originalStyles.attributes = {};
                     originalStyles.attributes[attr.name] = attr.value;
                     const newValue = this.applyColorMapping(attr.value);
@@ -559,7 +583,7 @@ class ColorToggle extends HTMLElement {
     }
 
     shouldProcessElement(element) {
-        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
+        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE'];
         if (skipTags.includes(element.tagName)) return false;
         if (element.getRootNode() !== document) return false;
         return true;
@@ -571,7 +595,7 @@ class ColorToggle extends HTMLElement {
             detail: { theme: this.currentTheme }
         }));
 
-        const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart');
+        const customElements = document.querySelectorAll('[data-color], [color], multi-axis');
         customElements.forEach(el => {
             if (el.refresh && typeof el.refresh === 'function') {
                 el.refresh();
