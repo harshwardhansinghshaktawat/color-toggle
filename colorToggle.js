@@ -350,14 +350,14 @@ class ColorToggle extends HTMLElement {
         const rootStyles = getComputedStyle(document.documentElement);
         const inlineRootStyle = document.documentElement.getAttribute('style') || '';
 
-        // Store original CSS variables if not already stored
+        // Store original CSS variables if not already stored (only on first toggle)
         if (!this.originalCSSVariables.has('root')) {
             const originalVars = new Map();
             
             // Store original inline style
             originalVars.set('__inline_style__', inlineRootStyle);
             
-            // Store original CSS variable values
+            // Store ALL CSS variable values from computed styles (including inherited ones)
             for (let i = 0; i < rootStyles.length; i++) {
                 const property = rootStyles[i];
                 if (property.startsWith('--')) {
@@ -366,20 +366,46 @@ class ColorToggle extends HTMLElement {
                 }
             }
             
+            // Also capture CSS variables from all stylesheets
+            try {
+                Array.from(document.styleSheets).forEach(sheet => {
+                    try {
+                        if (!sheet.href || sheet.href.includes(window.location.origin)) {
+                            Array.from(sheet.cssRules || []).forEach(rule => {
+                                if (rule.type === CSSRule.STYLE_RULE && rule.selectorText === ':root') {
+                                    Array.from(rule.style).forEach(prop => {
+                                        if (prop.startsWith('--') && !originalVars.has(prop)) {
+                                            const value = rule.style.getPropertyValue(prop).trim();
+                                            originalVars.set(prop, value);
+                                        }
+                                    });
+                                }
+                            });
+                        }
+                    } catch (e) {
+                        // Skip CORS-restricted stylesheets
+                    }
+                });
+            } catch (e) {
+                // Skip stylesheet access errors
+            }
+            
             this.originalCSSVariables.set('root', originalVars);
         }
 
+        // Find CSS variables that contain target colors
         const cssVariables = [];
         for (let i = 0; i < rootStyles.length; i++) {
             const property = rootStyles[i];
             if (property.startsWith('--')) {
                 const value = rootStyles.getPropertyValue(property).trim();
-                if (this.containsTargetColors(value)) {
+                if (this.containsTargetColors(value) || this.isColorLikeValue(value)) {
                     cssVariables.push({ property, value });
                 }
             }
         }
 
+        // Include Wix-specific color patterns
         const wixColorPatterns = [
             /^--wix-color-\d+$/,
             /^--.*[Cc]olor.*$/,
@@ -396,33 +422,45 @@ class ColorToggle extends HTMLElement {
             /^--shadowColor$/
         ];
 
-        const allComputedVars = Array.from(document.styleSheets)
-            .flatMap(sheet => {
+        // Check stylesheet-defined variables
+        try {
+            Array.from(document.styleSheets).forEach(sheet => {
                 try {
-                    return Array.from(sheet.cssRules || []);
+                    if (!sheet.href || sheet.href.includes(window.location.origin)) {
+                        Array.from(sheet.cssRules || []).forEach(rule => {
+                            if (rule.type === CSSRule.STYLE_RULE) {
+                                Array.from(rule.style).forEach(prop => {
+                                    if (prop.startsWith('--') && 
+                                        wixColorPatterns.some(pattern => pattern.test(prop))) {
+                                        const value = rootStyles.getPropertyValue(prop).trim();
+                                        if (value && !cssVariables.some(v => v.property === prop)) {
+                                            if (this.isColorLikeValue(value)) {
+                                                cssVariables.push({ property: prop, value });
+                                            }
+                                        }
+                                    }
+                                });
+                            }
+                        });
+                    }
                 } catch (e) {
-                    return [];
+                    // Skip CORS-restricted stylesheets
                 }
-            })
-            .filter(rule => rule.type === CSSRule.STYLE_RULE)
-            .flatMap(rule => Array.from(rule.style))
-            .filter(prop => prop.startsWith('--'))
-            .filter(prop => wixColorPatterns.some(pattern => pattern.test(prop)));
-
-        allComputedVars.forEach(property => {
-            const value = rootStyles.getPropertyValue(property).trim();
-            if (value && !cssVariables.some(v => v.property === property)) {
-                if (this.isColorLikeValue(value)) {
-                    cssVariables.push({ property, value });
-                }
-            }
-        });
+            });
+        } catch (e) {
+            // Skip stylesheet access errors
+        }
 
         // Apply color mappings to CSS variables
         cssVariables.forEach(({ property, value }) => {
             const newValue = this.applyColorMapping(value, false);
-            document.documentElement.style.setProperty(property, newValue);
+            if (newValue !== value) {
+                document.documentElement.style.setProperty(property, newValue);
+            }
         });
+
+        // Force a repaint to ensure changes are applied
+        document.documentElement.offsetHeight;
     }
 
     isColorLikeValue(value) {
@@ -584,19 +622,42 @@ class ColorToggle extends HTMLElement {
         // Restore CSS variables first
         const originalVars = this.originalCSSVariables.get('root');
         if (originalVars) {
-            const originalInlineStyle = originalVars.get('__inline_style__');
+            // Clear all inline CSS variable modifications first
+            const currentStyle = document.documentElement.getAttribute('style') || '';
+            const styleProps = currentStyle.split(';').filter(prop => prop.trim());
             
-            // Restore original inline style or remove if it was empty
-            if (originalInlineStyle) {
-                document.documentElement.setAttribute('style', originalInlineStyle);
+            // Remove all CSS variable declarations from inline style
+            const nonCSSVarProps = styleProps.filter(prop => {
+                const trimmed = prop.trim();
+                return trimmed && !trimmed.startsWith('--');
+            });
+            
+            // Start with original inline style
+            const originalInlineStyle = originalVars.get('__inline_style__') || '';
+            let newInlineStyle = originalInlineStyle;
+            
+            // Add back non-CSS variable properties if any
+            if (nonCSSVarProps.length > 0) {
+                newInlineStyle = newInlineStyle ? 
+                    newInlineStyle + '; ' + nonCSSVarProps.join('; ') : 
+                    nonCSSVarProps.join('; ');
+            }
+            
+            // Set the cleaned inline style
+            if (newInlineStyle.trim()) {
+                document.documentElement.setAttribute('style', newInlineStyle);
             } else {
                 document.documentElement.removeAttribute('style');
             }
             
-            // Restore individual CSS variables
+            // Force restore CSS variables to their original computed values
             originalVars.forEach((value, property) => {
                 if (property !== '__inline_style__' && property.startsWith('--')) {
-                    document.documentElement.style.setProperty(property, value);
+                    if (value && value.trim()) {
+                        document.documentElement.style.setProperty(property, value);
+                    } else {
+                        document.documentElement.style.removeProperty(property);
+                    }
                 }
             });
         }
