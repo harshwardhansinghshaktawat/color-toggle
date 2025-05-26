@@ -2,10 +2,11 @@ class ColorToggle extends HTMLElement {
     constructor() {
         super();
         this.attachShadow({ mode: 'open' });
-        this.isToggled = false;
-        this.colorMappings = {}; // Start empty to preserve original theme
+        this.colorMappings = {}; // Start empty
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
+        this.processedStyleSheets = new Set();
+        this.currentTheme = 'light'; // Track theme for UI only
         this.render();
         this.attachEventListeners();
     }
@@ -18,27 +19,24 @@ class ColorToggle extends HTMLElement {
         if (name === 'options' && newValue && newValue !== oldValue) {
             try {
                 const options = JSON.parse(newValue);
-                this.updateColorMappings(options.originalColors, options.replacementColors);
-                // Reapply colors if toggled
-                if (this.isToggled) {
-                    requestAnimationFrame(() => {
-                        this.applyColorChanges();
-                    });
-                }
+                this.updateColorMappings(options.colors, options.sourceColors);
+                requestAnimationFrame(() => {
+                    this.applyColorChanges();
+                });
             } catch (e) {
                 console.error('Error parsing options:', e);
             }
         }
     }
 
-    updateColorMappings(originalColors, replacementColors) {
+    updateColorMappings(targetColors, sourceColors) {
         this.colorMappings = {};
-        if (originalColors && replacementColors) {
-            const originalArray = originalColors.split(',').map(c => c.trim().toUpperCase());
-            const replacementArray = replacementColors.split(',').map(c => c.trim().toUpperCase());
-            originalArray.forEach((orig, index) => {
-                if (this.isValidHex(orig) && this.isValidHex(replacementArray[index])) {
-                    this.colorMappings[orig] = replacementArray[index];
+        if (targetColors && sourceColors) {
+            const targetArray = targetColors.split(',').map(c => c.trim().toUpperCase());
+            const sourceArray = sourceColors.split(',').map(c => c.trim().toUpperCase());
+            sourceArray.forEach((src, index) => {
+                if (this.isValidHex(src) && this.isValidHex(targetArray[index])) {
+                    this.colorMappings[src] = targetArray[index];
                 }
             });
         }
@@ -124,22 +122,25 @@ class ColorToggle extends HTMLElement {
         const handleToggle = (event) => {
             event.preventDefault();
             event.stopPropagation();
-            this.isToggled = !this.isToggled;
-            this.updateToggleState();
-            requestAnimationFrame(() => {
-                this.toggleColors();
-            });
+            const newTheme = this.currentTheme === 'light' ? 'dark' : 'light';
+            this.updateToggleState(newTheme);
+            this.dispatchEvent(new CustomEvent('themeChanged', {
+                detail: { theme: newTheme },
+                bubbles: true,
+                composed: true
+            }));
         };
 
         toggleSwitch.addEventListener('click', handleToggle);
         container.addEventListener('click', handleToggle);
     }
 
-    updateToggleState() {
+    updateToggleState(theme) {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
         const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
-        toggleSwitch.classList.toggle('active', this.isToggled);
-        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
+        this.currentTheme = theme;
+        toggleSwitch.classList.toggle('active', theme === 'dark');
+        statusIndicator.textContent = theme === 'dark' ? 'Dark Mode' : 'Light Mode';
     }
 
     colorToHex(color) {
@@ -180,54 +181,97 @@ class ColorToggle extends HTMLElement {
         return [
             'color',
             'backgroundColor',
+            'backgroundImage',
             'borderColor',
             'borderTopColor',
             'borderRightColor',
             'borderBottomColor',
             'borderLeftColor',
+            'borderBlockStartColor',
+            'borderBlockEndColor',
+            'borderInlineStartColor',
+            'borderInlineEndColor',
             'outlineColor',
             'boxShadow',
             'textShadow',
+            'textDecorationColor',
+            'caretColor',
+            'accentColor',
             'fill',
-            'stroke'
+            'stroke',
+            'floodColor',
+            'lightingColor',
+            'stopColor',
+            'columnRuleColor',
+            'scrollbarColor',
+            'borderImageSource',
+            'maskImage',
+            'clipPath',
+            '--bg-gradient',
+            '--bg-overlay-color',
+            '--backgroundColor',
+            '--borderColor',
+            '--color',
+            '--fill',
+            '--stroke'
         ];
     }
 
-    applyColorMapping(value, isReverse = false) {
+    applyColorMapping(value) {
         if (!value) return value;
         let newValue = value;
-        const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
 
-        Object.entries(mappings).forEach(([original, replacement]) => {
+        Object.entries(this.colorMappings).forEach(([original, replacement]) => {
             const originalRgb = this.hexToRgb(original);
-            const replacementColor = replacement;
+            const replacementRgb = this.hexToRgb(replacement);
 
-            if (originalRgb) {
+            if (originalRgb && replacementRgb) {
                 const hexPatterns = [
                     new RegExp(original, 'gi'),
                     new RegExp(original.substring(1), 'gi')
                 ];
                 hexPatterns.forEach(pattern => {
-                    newValue = newValue.replace(pattern, replacementColor);
+                    newValue = newValue.replace(pattern, replacement);
                 });
 
                 const rgbPattern = new RegExp(
                     `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`,
                     'gi'
                 );
-                newValue = newValue.replace(rgbPattern, replacementColor);
+                newValue = newValue.replace(rgbPattern, replacement);
 
                 const rgbaPattern = new RegExp(
                     `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
                     'gi'
                 );
-                if (replacement.startsWith('#')) {
-                    const replacementRgb = this.hexToRgb(replacement);
-                    if (replacementRgb) {
-                        newValue = newValue.replace(rgbaPattern, (match, alpha) => {
-                            return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
-                        });
-                    }
+                newValue = newValue.replace(rgbaPattern, (match, alpha) => {
+                    return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
+                });
+
+                const bareRgbPattern = new RegExp(
+                    `\\b${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\b`,
+                    'g'
+                );
+                newValue = newValue.replace(bareRgbPattern, `${replacementRgb.r},${replacementRgb.g},${replacementRgb.b}`);
+
+                const rgbWithOpacityPattern = new RegExp(
+                    `\\b${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([0-9]*\\.?[0-9]+)\\b`,
+                    'g'
+                );
+                newValue = newValue.replace(rgbWithOpacityPattern, (match, opacity) => {
+                    return `${replacementRgb.r},${replacementRgb.g},${replacementRgb.b},${opacity}`);
+                });
+
+                const originalHsl = this.hexToHsl(original);
+                const replacementHsl = this.hexToHsl(replacement);
+                if (originalHsl && replacementHsl) {
+                    const hslPattern = new RegExp(
+                        `hsl\\(\\s*${Math.round(originalHsl.h)}\\s*,\\s*${Math.round(originalHsl.s)}%\\s*,\\s*${Math.round(originalHsl.l)}%\\s*\\)`,
+                        'gi'
+                    );
+                    newValue = newValue.replace(hslPattern,
+                        `hsl(${Math.round(replacementHsl.h)}, ${Math.round(replacementHsl.s)}%, ${Math.round(replacementHsl.l)}%)`
+                    );
                 }
             }
         });
@@ -244,12 +288,274 @@ class ColorToggle extends HTMLElement {
         } : null;
     }
 
-    getReverseMappings() {
-        const reverse = {};
-        Object.entries(this.colorMappings).forEach(([key, value]) => {
-            reverse[value] = key;
+    hexToHsl(hex) {
+        const rgb = this.hexToRgb(hex);
+        if (!rgb) return null;
+
+        const r = rgb.r / 255;
+        const g = rgb.g / 255;
+        const b = rgb.b / 255;
+
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        let h, s, l = (max + min) / 2;
+
+        if (max === min) {
+            h = s = 0;
+        } else {
+            const d = max - min;
+            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+            switch (max) {
+                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+                case g: h = (b - r) / d + 2; break;
+                case b: h = (r - g) / d + 4; break;
+            }
+            h /= 6;
+        }
+
+        return {
+            h: h * 360,
+            s: s * 100,
+            l: l * 100
+        };
+    }
+
+    containsTargetColors(value) {
+        if (!value || this.isTransparent(value)) return false;
+
+        const allColors = Object.keys(this.colorMappings);
+
+        for (const color of allColors) {
+            if (value.includes(color)) return true;
+
+            const rgb = this.hexToRgb(color);
+            if (rgb) {
+                const rgbPattern = new RegExp(`rgb\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*\\)`, 'i');
+                if (value.match(rgbPattern)) return true;
+
+                const rgbaPattern = new RegExp(`rgba\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,`, 'i');
+                if (value.match(rgbaPattern)) return true;
+
+                const bareRgbPattern = new RegExp(`\\b${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\b`);
+                if (value.match(bareRgbPattern)) return true;
+
+                const rgbOpacityPattern = new RegExp(`\\b${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,\\s*[0-9]*\\.?[0-9]+\\b`);
+                if (value.match(rgbOpacityPattern)) return true;
+
+                const hsl = this.hexToHsl(color);
+                if (hsl) {
+                    const hslPattern = new RegExp(
+                        `hsl\\(\\s*${Math.round(hsl.h)}\\s*,\\s*${Math.round(hsl.s)}%\\s*,\\s*${Math.round(hsl.l)}%\\s*\\)`,
+                        'i'
+                    );
+                    if (value.match(hslPattern)) return true;
+                }
+            }
+        }
+
+        return false;
+    }
+
+    processCSSVariables() {
+        const rootStyles = getComputedStyle(document.documentElement);
+        const inlineRootStyle = document.documentElement.getAttribute('style') || '';
+
+        const cssVariables = [];
+        for (let i = 0; i < rootStyles.length; i++) {
+            const property = rootStyles[i];
+            if (property.startsWith('--')) {
+                const value = rootStyles.getPropertyValue(property).trim();
+                if (this.containsTargetColors(value) || this.isColorLikeValue(value)) {
+                    cssVariables.push({ property, value });
+                }
+            }
+        }
+
+        const wixColorPatterns = [
+            /^--wix-color-\d+$/,
+            /^--.*[Cc]olor.*$/,
+            /^--.*[Bb]ackground.*$/,
+            /^--.*[Bb]order.*$/,
+            /^--.*[Ff]ill.*$/,
+            /^--.*[Ss]troke.*$/,
+            /^--bg-.*$/,
+            /^--.*-rgb$/,
+            /^--.*-opacity-and-color$/,
+            /^--shc-mutated-brightness$/,
+            /^--backgroundColor$/,
+            /^--borderColor$/,
+            /^--shadowColor$/
+        ];
+
+        const allComputedVars = Array.from(document.styleSheets)
+            .flatMap(sheet => {
+                try {
+                    return Array.from(sheet.cssRules || []);
+                } catch (e) {
+                    return [];
+                }
+            })
+            .filter(rule => rule.type === CSSRule.STYLE_RULE)
+            .flatMap(rule => Array.from(rule.style))
+            .filter(prop => prop.startsWith('--'))
+            .filter(prop => wixColorPatterns.some(pattern => pattern.test(prop)));
+
+        allComputedVars.forEach(property => {
+            const value = rootStyles.getPropertyValue(property).trim();
+            if (value && !cssVariables.some(v => v.property === property)) {
+                if (this.isColorLikeValue(value)) {
+                    cssVariables.push({ property, value });
+                }
+            }
         });
-        return reverse;
+
+        if (cssVariables.length > 0 && !this.originalStyles.has(document.documentElement)) {
+            this.originalStyles.set(document.documentElement, { style: inlineRootStyle });
+        }
+
+        cssVariables.forEach(({ property, value }) => {
+            const newValue = this.applyColorMapping(value);
+            document.documentElement.style.setProperty(property, newValue);
+        });
+    }
+
+    isColorLikeValue(value) {
+        if (!value) return false;
+
+        const colorPatterns = [
+            /#([0-9a-f]{3}|[0-9a-f]{6})/i,
+            /rgb\s*\(/i,
+            /rgba\s*\(/i,
+            /hsl\s*\(/i,
+            /hsla\s*\(/i,
+            /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/,
+            /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*$/,
+            /linear-gradient|radial-gradient/i,
+            /transparent|currentcolor/i
+        ];
+
+        return colorPatterns.some(pattern => pattern.test(value)) ||
+               this.containsTargetColors(value) ||
+               this.isMutatedBrightnessValue(value);
+    }
+
+    isMutatedBrightnessValue(value) {
+        const brightnessPattern = /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/;
+        return brightnessPattern.test(value);
+    }
+
+    processStyleSheets() {
+        try {
+            Array.from(document.styleSheets).forEach((styleSheet, index) => {
+                try {
+                    if (!styleSheet.href || styleSheet.href.includes(window.location.origin)) {
+                        const sheetId = `stylesheet-${index}`;
+                        if (!this.processedStyleSheets.has(sheetId)) {
+                            this.processedStyleSheets.add(sheetId);
+                        }
+                    }
+                } catch (e) {
+                    // Skip CORS-restricted stylesheets
+                }
+            });
+        } catch (e) {
+            // Skip stylesheet access errors
+        }
+    }
+
+    applyColorChanges() {
+        this.modifiedElements.clear();
+        this.originalStyles.clear();
+        this.processedStyleSheets.clear();
+
+        this.processCSSVariables();
+        this.processStyleSheets();
+
+        const allElements = document.querySelectorAll('*');
+
+        allElements.forEach(element => {
+            if (!this.shouldProcessElement(element)) return;
+
+            const computedStyle = window.getComputedStyle(element);
+            const originalStyles = {};
+            let hasChanges = false;
+
+            this.getColorProperties().forEach(property => {
+                const computedValue = computedStyle[property];
+                const currentInlineValue = element.style[property] || '';
+
+                if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
+                    return;
+                }
+
+                if (this.containsTargetColors(computedValue)) {
+                    originalStyles[property] = computedValue;
+                    const newValue = this.applyColorMapping(computedValue);
+                    element.style[property] = newValue;
+                    hasChanges = true;
+                }
+            });
+
+            if (element.style && element.style.cssText) {
+                const inlineStyle = element.style.cssText;
+                if (this.containsTargetColors(inlineStyle)) {
+                    originalStyles.inlineStyle = inlineStyle;
+                    const newInlineStyle = this.applyColorMapping(inlineStyle);
+                    element.style.cssText = newInlineStyle;
+                    hasChanges = true;
+                } else {
+                    originalStyles.inlineStyle = inlineStyle;
+                }
+            } else {
+                originalStyles.inlineStyle = '';
+            }
+
+            if (element.tagName === 'svg' || element.closest('svg')) {
+                ['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color'].forEach(attr => {
+                    const attrValue = element.getAttribute(attr);
+                    if (attrValue && this.containsTargetColors(attrValue)) {
+                        if (!originalStyles.attributes) originalStyles.attributes = {};
+                        originalStyles.attributes[attr] = attrValue;
+                        const newValue = this.applyColorMapping(attrValue);
+                        element.setAttribute(attr, newValue);
+                        hasChanges = true;
+                    }
+                });
+
+                ['fill-opacity', 'stroke-opacity'].forEach(attr => {
+                    const attrValue = element.getAttribute(attr);
+                    if (attrValue && parseFloat(attrValue) === 0) {
+                        return;
+                    }
+                });
+            }
+
+            Array.from(element.attributes).forEach(attr => {
+                const colorAttrPatterns = [
+                    /color/i,
+                    /background/i,
+                    /border/i,
+                    /fill/i,
+                    /stroke/i,
+                    /shadow/i
+                ];
+                const isColorAttr = colorAttrPatterns.some(pattern => pattern.test(attr.name));
+                if (isColorAttr && attr.value && this.containsTargetColors(attr.value)) {
+                    if (!originalStyles.attributes) originalStyles.attributes = {};
+                    originalStyles.attributes[attr.name] = attr.value;
+                    const newValue = this.applyColorMapping(attr.value);
+                    element.setAttribute(attr.name, newValue);
+                    hasChanges = true;
+                }
+            });
+
+            if (hasChanges) {
+                this.originalStyles.set(element, originalStyles);
+                this.modifiedElements.add(element);
+            }
+        });
+
+        this.triggerDynamicElementUpdates();
     }
 
     shouldProcessElement(element) {
@@ -259,81 +565,27 @@ class ColorToggle extends HTMLElement {
         return true;
     }
 
-    shouldChangeColor(color) {
-        if (!color || this.isTransparent(color)) return false;
-        const hex = this.colorToHex(color);
-        if (!hex) return false;
-        const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
-        return allColors.includes(hex);
-    }
+    triggerDynamicElementUpdates() {
+        window.dispatchEvent(new Event('resize'));
+        window.dispatchEvent(new CustomEvent('colorThemeChanged', {
+            detail: { theme: this.currentTheme }
+        }));
 
-    toggleColors() {
-        if (this.isToggled) {
-            this.applyColorChanges();
-        } else {
-            this.revertColorChanges();
-        }
-    }
-
-    applyColorChanges() {
-        this.revertColorChanges();
-        const allElements = document.querySelectorAll('*');
-
-        const processElement = (element) => {
-            if (!this.shouldProcessElement(element)) return;
-            const computedStyle = window.getComputedStyle(element);
-            const originalStyles = {};
-            let hasChanges = false;
-
-            this.getColorProperties().forEach(property => {
-                const computedValue = computedStyle[property];
-                const currentInlineValue = element.style[property];
-
-                if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
-                    return;
-                }
-
-                if (this.shouldChangeColor(computedValue)) {
-                    originalStyles[property] = currentInlineValue || '';
-                    const newValue = this.applyColorMapping(computedValue, false);
-                    element.style[property] = newValue;
-                    hasChanges = true;
-                }
-            });
-
-            if (hasChanges) {
-                this.originalStyles.set(element, originalStyles);
-                this.modifiedElements.add(element);
+        const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart');
+        customElements.forEach(el => {
+            if (el.refresh && typeof el.refresh === 'function') {
+                el.refresh();
             }
-        };
-
-        allElements.forEach(processElement);
-        this.dispatchEvent(new CustomEvent('themeChanged', {
-            detail: { theme: 'dark' }
-        }));
-    }
-
-    revertColorChanges() {
-        this.modifiedElements.forEach(element => {
-            const originalStyles = this.originalStyles.get(element);
-            if (!originalStyles) return;
-            Object.entries(originalStyles).forEach(([property, originalValue]) => {
-                if (originalValue !== '') {
-                    element.style[property] = originalValue;
-                } else {
-                    element.style.removeProperty(property);
-                }
-            });
+            if (el.updateChart && typeof el.updateChart === 'function') {
+                el.updateChart();
+            }
         });
-        this.modifiedElements.clear();
-        this.originalStyles.clear();
-        this.dispatchEvent(new CustomEvent('themeChanged', {
-            detail: { theme: 'light' }
-        }));
     }
 
     disconnectedCallback() {
-        this.revertColorChanges();
+        this.modifiedElements.clear();
+        this.originalStyles.clear();
+        this.processedStyleSheets.clear();
     }
 }
 
