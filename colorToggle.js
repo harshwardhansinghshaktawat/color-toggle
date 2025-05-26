@@ -53,23 +53,18 @@ class ColorToggle extends HTMLElement {
         this.shadowRoot.innerHTML = `
             <style>
                 :host {
-                    display: inline-block;
-                    font-family: Arial, sans-serif;
+                    display: flex;
+                    justify-content: center;
+                    align-items: center;
+                    background: transparent;
                 }
                 .toggle-container {
                     display: flex;
+                    justify-content: center;
                     align-items: center;
-                    gap: 10px;
-                    padding: 10px;
-                    background: #f5f5f5;
-                    border-radius: 8px;
-                    border: 1px solid #ddd;
+                    background: transparent;
                     user-select: none;
                     cursor: pointer;
-                    transition: all 0.3s ease;
-                }
-                .toggle-container:hover {
-                    background: #e8e8e8;
                 }
                 .toggle-switch {
                     position: relative;
@@ -97,23 +92,11 @@ class ColorToggle extends HTMLElement {
                 .toggle-switch.active .toggle-slider {
                     transform: translateX(25px);
                 }
-                .toggle-label {
-                    font-size: 14px;
-                    color: #333;
-                    font-weight: 500;
-                }
-                .status-indicator {
-                    font-size: 12px;
-                    color: #666;
-                    font-style: italic;
-                }
             </style>
             <div class="toggle-container">
                 <div class="toggle-switch" id="toggleSwitch">
                     <div class="toggle-slider"></div>
                 </div>
-                <div class="toggle-label">Theme Toggle</div>
-                <div class="status-indicator" id="statusIndicator">Light Mode</div>
             </div>
         `;
     }
@@ -138,9 +121,7 @@ class ColorToggle extends HTMLElement {
 
     updateToggleState() {
         const toggleSwitch = this.shadowRoot.getElementById('toggleSwitch');
-        const statusIndicator = this.shadowRoot.getElementById('statusIndicator');
         toggleSwitch.classList.toggle('active', this.isToggled);
-        statusIndicator.textContent = this.isToggled ? 'Dark Mode' : 'Light Mode';
     }
 
     colorToHex(color) {
