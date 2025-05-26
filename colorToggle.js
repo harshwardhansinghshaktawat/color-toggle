@@ -405,31 +405,14 @@ class ColorToggle extends HTMLElement {
     }
 
     revertColorChanges() {
-        this.modifiedElements.forEach(element => {
-            const originalStyles = this.originalStyles.get(element);
-            if (!originalStyles) return;
-
-            Object.entries(originalStyles).forEach(([property, originalValue]) => {
-                if (property === 'attributes') return;
-                if (property === 'cssVariables') return;
-                if (property === 'style') return;
-
-                if (originalValue !== '') {
-                    element.style[property] = originalValue;
-                } else {
-                    element.style.removeProperty(property);
-                }
-            });
-
-            if (originalStyles.attributes) {
-                Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
-                    element.setAttribute(attr, value);
-                });
-            }
-        });
-
+        // Restore CSS variables
         const rootOriginal = this.originalStyles.get(document.documentElement);
-        if (rootOriginal) {
+        if (rootOriginal && rootOriginal.cssVariables) {
+            rootOriginal.cssVariables.forEach(({ property, value }) => {
+                document.documentElement.style.setProperty(property, value);
+            });
+        }
+        if (rootOriginal && rootOriginal.style !== undefined) {
             if (rootOriginal.style) {
                 document.documentElement.setAttribute('style', rootOriginal.style);
             } else {
@@ -437,11 +420,39 @@ class ColorToggle extends HTMLElement {
             }
         }
 
+        // Restore element styles and attributes
+        this.modifiedElements.forEach(element => {
+            const originalStyles = this.originalStyles.get(element);
+            if (!originalStyles) return;
+
+            // Restore CSS properties
+            this.getColorProperties().forEach(property => {
+                if (property in originalStyles) {
+                    const originalValue = originalStyles[property];
+                    if (originalValue !== '') {
+                        element.style[property] = originalValue;
+                    } else {
+                        element.style.removeProperty(property);
+                    }
+                }
+            });
+
+            // Restore attributes
+            if (originalStyles.attributes) {
+                Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
+                    if (value !== null && value !== undefined) {
+                        element.setAttribute(attr, value);
+                    } else {
+                        element.removeAttribute(attr);
+                    }
+                });
+            }
+        });
+
+        // Clear tracking
         this.modifiedElements.clear();
         this.originalStyles.clear();
         this.processedStyleSheets.clear();
-
-        this.triggerDynamicElementUpdates();
 
         this.dispatchEvent(new CustomEvent('themeChanged', {
             detail: { theme: 'light' }
