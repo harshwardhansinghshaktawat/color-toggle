@@ -6,7 +6,6 @@ class ColorToggle extends HTMLElement {
         this.colorMappings = {}; // Start empty to preserve original theme
         this.originalStyles = new Map();
         this.modifiedElements = new Set();
-        this.processedStyleSheets = new Set();
         this.render();
         this.attachEventListeners();
     }
@@ -20,6 +19,7 @@ class ColorToggle extends HTMLElement {
             try {
                 const options = JSON.parse(newValue);
                 this.updateColorMappings(options.originalColors, options.replacementColors);
+                // Reapply colors if toggled
                 if (this.isToggled) {
                     requestAnimationFrame(() => {
                         this.applyColorChanges();
@@ -180,39 +180,16 @@ class ColorToggle extends HTMLElement {
         return [
             'color',
             'backgroundColor',
-            'backgroundImage',
             'borderColor',
             'borderTopColor',
             'borderRightColor',
             'borderBottomColor',
             'borderLeftColor',
-            'borderBlockStartColor',
-            'borderBlockEndColor',
-            'borderInlineStartColor',
-            'borderInlineEndColor',
             'outlineColor',
             'boxShadow',
             'textShadow',
-            'textDecorationColor',
-            'caretColor',
-            'accentColor',
             'fill',
-            'stroke',
-            'floodColor',
-            'lightingColor',
-            'stopColor',
-            'columnRuleColor',
-            'scrollbarColor',
-            'borderImageSource',
-            'maskImage',
-            'clipPath',
-            '--bg-gradient',
-            '--bg-overlay-color',
-            '--backgroundColor',
-            '--borderColor',
-            '--color',
-            '--fill',
-            '--stroke'
+            'stroke'
         ];
     }
 
@@ -223,55 +200,34 @@ class ColorToggle extends HTMLElement {
 
         Object.entries(mappings).forEach(([original, replacement]) => {
             const originalRgb = this.hexToRgb(original);
-            const replacementRgb = this.hexToRgb(replacement);
+            const replacementColor = replacement;
 
-            if (originalRgb && replacementRgb) {
+            if (originalRgb) {
                 const hexPatterns = [
                     new RegExp(original, 'gi'),
                     new RegExp(original.substring(1), 'gi')
                 ];
                 hexPatterns.forEach(pattern => {
-                    newValue = newValue.replace(pattern, replacement);
+                    newValue = newValue.replace(pattern, replacementColor);
                 });
 
                 const rgbPattern = new RegExp(
                     `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`,
                     'gi'
                 );
-                newValue = newValue.replace(rgbPattern, replacement);
+                newValue = newValue.replace(rgbPattern, replacementColor);
 
                 const rgbaPattern = new RegExp(
                     `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
                     'gi'
                 );
-                newValue = newValue.replace(rgbaPattern, (match, alpha) => {
-                    return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
-                });
-
-                const bareRgbPattern = new RegExp(
-                    `\\b${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\b`,
-                    'g'
-                );
-                newValue = newValue.replace(bareRgbPattern, `${replacementRgb.r},${replacementRgb.g},${replacementRgb.b}`);
-
-                const rgbWithOpacityPattern = new RegExp(
-                    `\\b${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([0-9]*\\.?[0-9]+)\\b`,
-                    'g'
-                );
-                newValue = newValue.replace(rgbWithOpacityPattern, (match, opacity) => {
-                    return `${replacementRgb.r},${replacementRgb.g},${replacementRgb.b},${opacity}`;
-                });
-
-                const originalHsl = this.hexToHsl(original);
-                const replacementHsl = this.hexToHsl(replacement);
-                if (originalHsl && replacementHsl) {
-                    const hslPattern = new RegExp(
-                        `hsl\\(\\s*${Math.round(originalHsl.h)}\\s*,\\s*${Math.round(originalHsl.s)}%\\s*,\\s*${Math.round(originalHsl.l)}%\\s*\\)`,
-                        'gi'
-                    );
-                    newValue = newValue.replace(hslPattern,
-                        `hsl(${Math.round(replacementHsl.h)}, ${Math.round(replacementHsl.s)}%, ${Math.round(replacementHsl.l)}%)`
-                    );
+                if (replacement.startsWith('#')) {
+                    const replacementRgb = this.hexToRgb(replacement);
+                    if (replacementRgb) {
+                        newValue = newValue.replace(rgbaPattern, (match, alpha) => {
+                            return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
+                        });
+                    }
                 }
             }
         });
@@ -288,38 +244,6 @@ class ColorToggle extends HTMLElement {
         } : null;
     }
 
-    hexToHsl(hex) {
-        const rgb = this.hexToRgb(hex);
-        if (!rgb) return null;
-
-        const r = rgb.r / 255;
-        const g = rgb.g / 255;
-        const b = rgb.b / 255;
-
-        const max = Math.max(r, g, b);
-        const min = Math.min(r, g, b);
-        let h, s, l = (max + min) / 2;
-
-        if (max === min) {
-            h = s = 0;
-        } else {
-            const d = max - min;
-            s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-            switch (max) {
-                case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-                case g: h = (b - r) / d + 2; break;
-                case b: h = (r - g) / d + 4; break;
-            }
-            h /= 6;
-        }
-
-        return {
-            h: h * 360,
-            s: s * 100,
-            l: l * 100
-        };
-    }
-
     getReverseMappings() {
         const reverse = {};
         Object.entries(this.colorMappings).forEach(([key, value]) => {
@@ -328,150 +252,19 @@ class ColorToggle extends HTMLElement {
         return reverse;
     }
 
-    containsTargetColors(value) {
-        if (!value || this.isTransparent(value)) return false;
+    shouldProcessElement(element) {
+        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
+        if (skipTags.includes(element.tagName)) return false;
+        if (element.getRootNode() !== document) return false;
+        return true;
+    }
 
+    shouldChangeColor(color) {
+        if (!color || this.isTransparent(color)) return false;
+        const hex = this.colorToHex(color);
+        if (!hex) return false;
         const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
-
-        for (const color of allColors) {
-            if (value.includes(color)) return true;
-
-            const rgb = this.hexToRgb(color);
-            if (rgb) {
-                const rgbPattern = new RegExp(`rgb\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*\\)`, 'i');
-                if (value.match(rgbPattern)) return true;
-
-                const rgbaPattern = new RegExp(`rgba\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,`, 'i');
-                if (value.match(rgbaPattern)) return true;
-
-                const bareRgbPattern = new RegExp(`\\b${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\b`);
-                if (value.match(bareRgbPattern)) return true;
-
-                const rgbOpacityPattern = new RegExp(`\\b${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,\\s*[0-9]*\\.?[0-9]+\\b`);
-                if (value.match(rgbOpacityPattern)) return true;
-
-                const hsl = this.hexToHsl(color);
-                if (hsl) {
-                    const hslPattern = new RegExp(
-                        `hsl\\(\\s*${Math.round(hsl.h)}\\s*,\\s*${Math.round(hsl.s)}%\\s*,\\s*${Math.round(hsl.l)}%\\s*\\)`,
-                        'i'
-                    );
-                    if (value.match(hslPattern)) return true;
-                }
-            }
-        }
-
-        return false;
-    }
-
-    processCSSVariables() {
-        const rootStyles = getComputedStyle(document.documentElement);
-        const inlineRootStyle = document.documentElement.getAttribute('style') || '';
-
-        const cssVariables = [];
-        for (let i = 0; i < rootStyles.length; i++) {
-            const property = rootStyles[i];
-            if (property.startsWith('--')) {
-                const value = rootStyles.getPropertyValue(property).trim();
-                if (this.containsTargetColors(value) || this.isColorLikeValue(value)) {
-                    cssVariables.push({ property, value });
-                }
-            }
-        }
-
-        const wixColorPatterns = [
-            /^--wix-color-\d+$/,
-            /^--.*[Cc]olor.*$/,
-            /^--.*[Bb]ackground.*$/,
-            /^--.*[Bb]order.*$/,
-            /^--.*[Ff]ill.*$/,
-            /^--.*[Ss]troke.*$/,
-            /^--bg-.*$/,
-            /^--.*-rgb$/,
-            /^--.*-opacity-and-color$/,
-            /^--shc-mutated-brightness$/,
-            /^--backgroundColor$/,
-            /^--borderColor$/,
-            /^--shadowColor$/
-        ];
-
-        const allComputedVars = Array.from(document.styleSheets)
-            .flatMap(sheet => {
-                try {
-                    return Array.from(sheet.cssRules || []);
-                } catch (e) {
-                    return [];
-                }
-            })
-            .filter(rule => rule.type === CSSRule.STYLE_RULE)
-            .flatMap(rule => Array.from(rule.style))
-            .filter(prop => prop.startsWith('--'))
-            .filter(prop => wixColorPatterns.some(pattern => pattern.test(prop)));
-
-        allComputedVars.forEach(property => {
-            const value = rootStyles.getPropertyValue(property).trim();
-            if (value && !cssVariables.some(v => v.property === property)) {
-                if (this.isColorLikeValue(value)) {
-                    cssVariables.push({ property, value });
-                }
-            }
-        });
-
-        if (cssVariables.length > 0 && !this.originalStyles.has(document.documentElement)) {
-            this.originalStyles.set(document.documentElement, {
-                style: inlineRootStyle,
-                cssVariables: cssVariables.map(v => ({ ...v }))
-            });
-        }
-
-        cssVariables.forEach(({ property, value }) => {
-            const newValue = this.applyColorMapping(value, !this.isToggled);
-            document.documentElement.style.setProperty(property, newValue);
-        });
-    }
-
-    isColorLikeValue(value) {
-        if (!value) return false;
-
-        const colorPatterns = [
-            /#([0-9a-f]{3}|[0-9a-f]{6})/i,
-            /rgb\s*\(/i,
-            /rgba\s*\(/i,
-            /hsl\s*\(/i,
-            /hsla\s*\(/i,
-            /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/,
-            /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*,\s*[\d.]+\s*$/,
-            /linear-gradient|radial-gradient/i,
-            /transparent|currentcolor/i
-        ];
-
-        return colorPatterns.some(pattern => pattern.test(value)) ||
-               this.containsTargetColors(value) ||
-               this.isMutatedBrightnessValue(value);
-    }
-
-    isMutatedBrightnessValue(value) {
-        const brightnessPattern = /^\s*\d+\s*,\s*\d+\s*,\s*\d+\s*$/;
-        return brightnessPattern.test(value);
-    }
-
-    processStyleSheets() {
-        try {
-            Array.from(document.styleSheets).forEach((styleSheet, index) => {
-                try {
-                    if (!styleSheet.href || styleSheet.href.includes(window.location.origin)) {
-                        const sheetId = `stylesheet-${index}`;
-                        if (!this.processedStyleSheets.has(sheetId)) {
-                            this.processedStyleSheets.add(sheetId);
-                        }
-                    }
-                } catch (e) {
-                    // Skip CORS-restricted stylesheets
-                }
-            });
-        } catch (e) {
-            // Skip stylesheet access errors
-        }
+        return allColors.includes(hex);
     }
 
     toggleColors() {
@@ -484,85 +277,26 @@ class ColorToggle extends HTMLElement {
 
     applyColorChanges() {
         this.revertColorChanges();
-        this.processCSSVariables();
-        this.processStyleSheets();
-
         const allElements = document.querySelectorAll('*');
 
-        allElements.forEach(element => {
+        const processElement = (element) => {
             if (!this.shouldProcessElement(element)) return;
-
             const computedStyle = window.getComputedStyle(element);
             const originalStyles = {};
             let hasChanges = false;
 
-            // Store all computed styles for background properties to ensure full restoration
             this.getColorProperties().forEach(property => {
                 const computedValue = computedStyle[property];
-                const currentInlineValue = element.style[property] || '';
+                const currentInlineValue = element.style[property];
 
                 if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
                     return;
                 }
 
-                if (this.containsTargetColors(computedValue)) {
-                    originalStyles[property] = computedValue; // Store computed value for accurate restoration
+                if (this.shouldChangeColor(computedValue)) {
+                    originalStyles[property] = currentInlineValue || '';
                     const newValue = this.applyColorMapping(computedValue, false);
                     element.style[property] = newValue;
-                    hasChanges = true;
-                }
-            });
-
-            // Store entire inline style string for complete restoration
-            if (element.style && element.style.cssText) {
-                const inlineStyle = element.style.cssText;
-                if (this.containsTargetColors(inlineStyle)) {
-                    originalStyles.inlineStyle = inlineStyle;
-                    const newInlineStyle = this.applyColorMapping(inlineStyle, false);
-                    element.style.cssText = newInlineStyle;
-                    hasChanges = true;
-                } else {
-                    originalStyles.inlineStyle = inlineStyle; // Store even if no changes to ensure restoration
-                }
-            } else {
-                originalStyles.inlineStyle = ''; // Store empty inline style if none exists
-            }
-
-            if (element.tagName === 'svg' || element.closest('svg')) {
-                ['fill', 'stroke', 'stop-color', 'flood-color', 'lighting-color'].forEach(attr => {
-                    const attrValue = element.getAttribute(attr);
-                    if (attrValue && this.containsTargetColors(attrValue)) {
-                        if (!originalStyles.attributes) originalStyles.attributes = {};
-                        originalStyles.attributes[attr] = attrValue;
-                        const newValue = this.applyColorMapping(attrValue, false);
-                        element.setAttribute(attr, newValue);
-                        hasChanges = true;
-                    }
-                });
-
-                ['fill-opacity', 'stroke-opacity'].forEach(attr => {
-                    const attrValue = element.getAttribute(attr);
-                    if (attrValue && parseFloat(attrValue) === 0) {
-                        return;
-                    }
-                });
-            }
-
-            Array.from(element.attributes).forEach(attr => {
-                const colorAttrPatterns = [
-                    /color/i,
-                    /background/i,
-                    /border/i,
-                    /fill/i,
-                    /stroke/i,
-                    /shadow/i
-                ];
-                const isColorAttr = colorAttrPatterns.some(pattern => pattern.test(attr.name));
-                if (isColorAttr && attr.value && this.containsTargetColors(attr.value)) {
-                    if (!originalStyles.attributes) originalStyles.attributes = {};
-                    originalStyles.attributes[attr.name] = attr.value;
-                    const newValue = this.applyColorMapping(attr.value, false);
-                    element.setAttribute(attr.name, newValue);
                     hasChanges = true;
                 }
             });
@@ -571,10 +305,9 @@ class ColorToggle extends HTMLElement {
                 this.originalStyles.set(element, originalStyles);
                 this.modifiedElements.add(element);
             }
-        });
+        };
 
-        this.triggerDynamicElementUpdates();
-
+        allElements.forEach(processElement);
         this.dispatchEvent(new CustomEvent('themeChanged', {
             detail: { theme: 'dark' }
         }));
@@ -584,81 +317,19 @@ class ColorToggle extends HTMLElement {
         this.modifiedElements.forEach(element => {
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
-
-            // Restore individual CSS properties
             Object.entries(originalStyles).forEach(([property, originalValue]) => {
-                if (property === 'attributes' || property === 'cssVariables' || property === 'style' || property === 'inlineStyle') return;
-
-                if (originalValue && originalValue !== '') {
+                if (originalValue !== '') {
                     element.style[property] = originalValue;
                 } else {
                     element.style.removeProperty(property);
                 }
             });
-
-            // Restore attributes
-            if (originalStyles.attributes) {
-                Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
-                    element.setAttribute(attr, value);
-                });
-            }
-
-            // Restore entire inline style string
-            if (originalStyles.inlineStyle !== undefined) {
-                element.style.cssText = originalStyles.inlineStyle;
-            } else {
-                element.style.cssText = ''; // Clear inline styles if none originally
-            }
         });
-
-        // Restore CSS variables
-        const rootOriginal = this.originalStyles.get(document.documentElement);
-        if (rootOriginal) {
-            if (rootOriginal.cssVariables) {
-                rootOriginal.cssVariables.forEach(({ property, value }) => {
-                    document.documentElement.style.setProperty(property, value);
-                });
-            }
-            if (rootOriginal.style) {
-                document.documentElement.setAttribute('style', rootOriginal.style);
-            } else {
-                document.documentElement.removeAttribute('style');
-            }
-        }
-
         this.modifiedElements.clear();
         this.originalStyles.clear();
-        this.processedStyleSheets.clear();
-
-        this.triggerDynamicElementUpdates();
-
         this.dispatchEvent(new CustomEvent('themeChanged', {
             detail: { theme: 'light' }
         }));
-    }
-
-    shouldProcessElement(element) {
-        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
-        if (skipTags.includes(element.tagName)) return false;
-        if (element.getRootNode() !== document) return false;
-        return true;
-    }
-
-    triggerDynamicElementUpdates() {
-        window.dispatchEvent(new Event('resize'));
-        window.dispatchEvent(new CustomEvent('colorThemeChanged', {
-            detail: { isToggled: this.isToggled }
-        }));
-
-        const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart');
-        customElements.forEach(el => {
-            if (el.refresh && typeof el.refresh === 'function') {
-                el.refresh();
-            }
-            if (el.updateChart && typeof el.updateChart === 'function') {
-                el.updateChart();
-            }
-        });
     }
 
     disconnectedCallback() {
