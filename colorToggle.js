@@ -9,25 +9,36 @@ class ColorToggle extends HTMLElement {
             replacement: { background: '#2a2a2a', accent: '#66bb6a' }
         };
         this.originalStyles = new Map();
-        this.originalCSSVariables = new Map();
         this.modifiedElements = new Set();
-        this.processedStyleSheets = new Set();
         this.observer = null;
 
-        // Initialize debounceApplyTheme in constructor
+        // Default color mappings for common Wix colors
+        this.colorMappings = {
+            '#FFFFFF': '#000000',  // White to Black
+            '#000000': '#FFFFFF',  // Black to White  
+            '#CDCDCD': '#333333',  // Light gray to dark gray
+            '#323232': '#CDCDCD',  // Dark gray to light gray
+            '#F5F5F5': '#1A1A1A',  // Very light gray to very dark gray
+            '#E5E5E5': '#2A2A2A',  // Light gray to dark gray
+            '#999999': '#666666',  // Medium gray to darker gray
+            '#CCCCCC': '#444444',  // Light gray to dark gray
+            '#DDDDDD': '#222222',  // Very light gray to very dark gray
+            '#EEEEEE': '#111111',  // Almost white to almost black
+            '#F0F0F0': '#0F0F0F',  // Very light gray to very dark gray
+        };
+
+        // Initialize debounceApplyTheme
         this.debounceApplyTheme = (() => {
             let timeout;
             return () => {
                 clearTimeout(timeout);
                 timeout = setTimeout(() => {
                     requestAnimationFrame(() => {
-                        // Save scroll position before applying theme
                         const scrollY = window.scrollY;
                         this.toggleColors();
-                        // Restore scroll position
                         window.scrollTo(0, scrollY);
                     });
-                }, 150); // Increased to 150ms to reduce scroll interference
+                }, 150);
             };
         })();
 
@@ -80,14 +91,21 @@ class ColorToggle extends HTMLElement {
     setupMutationObserver() {
         this.observer = new MutationObserver((mutations) => {
             if (this.isToggled) {
-                this.debounceApplyTheme();
+                let shouldUpdate = false;
+                mutations.forEach(mutation => {
+                    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
+                        shouldUpdate = true;
+                    }
+                });
+                if (shouldUpdate) {
+                    this.debounceApplyTheme();
+                }
             }
         });
-        // Limit observation to Blog container if available
-        const blogContainer = document.querySelector('[data-hook*="blog"]') || document.body;
-        this.observer.observe(blogContainer, {
+
+        this.observer.observe(document.body, {
             childList: true,
-            subtree: true,
+            subtree: true
         });
     }
 
@@ -129,6 +147,21 @@ class ColorToggle extends HTMLElement {
                     this.colorMappings[orig] = replacementArray[index];
                 }
             });
+        } else {
+            // Default mappings if none provided
+            this.colorMappings = {
+                '#FFFFFF': '#000000',
+                '#000000': '#FFFFFF',
+                '#CDCDCD': '#333333',
+                '#323232': '#CDCDCD',
+                '#F5F5F5': '#1A1A1A',
+                '#E5E5E5': '#2A2A2A',
+                '#999999': '#666666',
+                '#CCCCCC': '#444444',
+                '#DDDDDD': '#222222',
+                '#EEEEEE': '#111111',
+                '#F0F0F0': '#0F0F0F',
+            };
         }
         
         this.updateToggleDesign();
@@ -136,6 +169,147 @@ class ColorToggle extends HTMLElement {
 
     isValidHex(color) {
         return /^#[0-9A-F]{6}$/i.test(color);
+    }
+
+    getWixTargetClasses() {
+        return [
+            'anchor-menu', 'anchor-menu__item', 'anchor-menu__label',
+            'dropdown-menu', 'dropdown-menu__item', 'dropdown-menu__submenu',
+            'horizontal-menu', 'horizontal-menu__item-label', 'horizontal-menu__item',
+            'vertical-menu', 'vertical-menu__item', 'vertical-menu__item-label',
+            'vertical-menu__submenu', 'vertical-menu__arrow',
+            'accordion', 'accordion__title', 'accordion__container', 'accordion__item', 'accordion__icon',
+            'image-button', 'language-menu', 'language-menu__option',
+            'lightbox', 'lightbox__close-button',
+            'horizontal-line', 'vertical-line',
+            'search-bar', 'search-bar__icon', 'search-bar__input',
+            'audio-player', 'box', 'breadcrumbs', 'breadcrumbs__item',
+            'button__label', 'button__icon', 'button',
+            'captcha', 'checkbox', 'checkbox-group', 'checkbox-group__label',
+            'collapsible-text', 'collapsible-text__button',
+            'column-strip', 'date-picker', 'date-picker__label', 'date-picker__input',
+            'date-picker__icon', 'date-picker__header',
+            'dropdown', 'dropdown__label', 'dropdown__icon', 'dropdown__input', 'dropdown__list',
+            'footer', 'form', 'googlemap', 'header', 'image',
+            'lottie-embed', 'multi-state-box', 'page',
+            'pagination', 'pagination__navigation-button',
+            'progress-bar', 'radio-button-group', 'radio-button-group__label',
+            'radio-button-group__option', 'radio-button-group__input',
+            'ratings-display__label', 'ratings-display', 'ratings-input', 'ratings-input__label',
+            'repeater', 'rich-text-box', 'rich-text-box__input', 'rich-text-box__toolbar', 'rich-text-box__icon',
+            'section', 'selection-tags', 'selection-tags__options',
+            'signature-input', 'signature-input__label', 'signature-input__button', 'signature-input__input',
+            'slideshow', 'switch', 'switch__label', 'switch__track', 'switch__handle',
+            'table', 'table__row', 'table__header', 'table__cell', 'table__body', 'table__pagination',
+            'tabs', 'tabs__menu-container', 'tabs__container', 'tabs__scroll-button', 'tabs__item',
+            'rich-text', 'rich-text__text',
+            'text-box', 'text-box__label', 'text-box__input',
+            'text-input', 'text-input__label', 'text-input__input',
+            'time-picker', 'time-picker__label', 'time-picker__input', 'time-picker__icon',
+            'upload-button', 'upload-button__icon', 'upload-button__label', 'upload-button__field-title',
+            'vector-image', 'video-box', 'video-player'
+        ];
+    }
+
+    matchesWixClass(element) {
+        const className = element.className;
+        const tagName = element.tagName.toLowerCase();
+        const id = element.id || '';
+        
+        // Check for specific Wix CSS classes
+        if (className && typeof className === 'string') {
+            const targetClasses = this.getWixTargetClasses();
+            if (targetClasses.some(targetClass => className.includes(targetClass))) {
+                return true;
+            }
+        }
+        
+        // Check for background/container elements
+        if (this.isBackgroundContainer(element)) {
+            return true;
+        }
+        
+        // Check for Wix-specific patterns in class or id
+        if (className && typeof className === 'string') {
+            // Wix component patterns
+            if (className.includes('wixui-') || 
+                className.includes('comp-') || 
+                className.includes('section') || 
+                className.includes('container') ||
+                className.includes('background') ||
+                className.includes('strip') ||
+                className.includes('layout')) {
+                return true;
+            }
+        }
+        
+        if (id && typeof id === 'string') {
+            // Wix ID patterns
+            if (id.includes('comp-') || 
+                id.includes('section') || 
+                id.includes('container') ||
+                id.includes('background')) {
+                return true;
+            }
+        }
+        
+        // Check for semantic HTML elements that might be containers
+        if (['section', 'header', 'footer', 'main', 'article', 'aside', 'div'].includes(tagName)) {
+            // Only include if they have some styling that suggests they're layout elements
+            const computedStyle = window.getComputedStyle(element);
+            const bgColor = computedStyle.backgroundColor;
+            if (bgColor && 
+                bgColor !== 'rgba(0, 0, 0, 0)' && 
+                bgColor !== 'transparent' && 
+                bgColor !== 'initial' && 
+                bgColor !== 'inherit') {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    isBackgroundContainer(element) {
+        const className = element.className;
+        const id = element.id || '';
+        
+        if (typeof className === 'string') {
+            // Common background/container class patterns
+            const backgroundPatterns = [
+                'background', 'bg-', 'container', 'wrapper', 'layout', 'strip',
+                'section', 'row', 'col-', 'grid', 'flex', 'box', 'panel',
+                'content', 'main', 'body', 'area', 'zone', 'region'
+            ];
+            
+            if (backgroundPatterns.some(pattern => className.toLowerCase().includes(pattern))) {
+                return true;
+            }
+        }
+        
+        if (typeof id === 'string') {
+            const backgroundPatterns = ['bg', 'background', 'container', 'section', 'wrapper', 'layout'];
+            if (backgroundPatterns.some(pattern => id.toLowerCase().includes(pattern))) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
+    isTransparent(color) {
+        if (!color) return true;
+        const normalized = color.toLowerCase().replace(/\s/g, '');
+        const transparentValues = [
+            'transparent', 'initial', 'inherit', 'unset',
+            'rgba(0,0,0,0)', 'rgba(0,0,0,0.0)', 
+            'hsla(0,0%,0%,0)', 'hsla(0,0%,0%,0.0)'
+        ];
+        if (transparentValues.includes(normalized)) return true;
+        
+        // Check for any rgba/hsla with 0 alpha
+        const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
+        return !!alphaMatch;
     }
 
     render() {
@@ -149,6 +323,7 @@ class ColorToggle extends HTMLElement {
                     min-width: 60px;
                     min-height: 35px;
                     font-family: Arial, sans-serif;
+                    z-index: 999999;
                 }
                 .toggle-container {
                     position: absolute;
@@ -221,7 +396,6 @@ class ColorToggle extends HTMLElement {
 
         toggleSwitch.addEventListener('click', handleToggle);
         container.addEventListener('click', handleToggle);
-        // Add keyboard support
         toggleSwitch.addEventListener('keydown', (event) => {
             if (event.key === 'Enter' || event.key === ' ') {
                 event.preventDefault();
@@ -269,111 +443,6 @@ class ColorToggle extends HTMLElement {
         }).join('').toUpperCase();
     }
 
-    colorToHex(color) {
-        if (!color) return null;
-        color = color.trim();
-        if (color.startsWith('#')) {
-            const hex = color.toUpperCase();
-            if (hex.length === 4) {
-                return '#' + hex[1] + hex[1] + hex[2] + hex[2] + hex[3] + hex[3];
-            }
-            return hex;
-        }
-        if (color.startsWith('rgb')) {
-            const values = color.match(/\d+/g);
-            if (values && values.length >= 3) {
-                const r = parseInt(values[0]);
-                const g = parseInt(values[1]);
-                const b = parseInt(values[2]);
-                return '#' + [r, g, b].map(x => {
-                    const hex = x.toString(16);
-                    return hex.length === 1 ? '0' + hex : hex;
-                }).join('').toUpperCase();
-            }
-        }
-        return null;
-    }
-
-    isTransparent(color) {
-        if (!color) return true;
-        const normalized = color.toLowerCase().replace(/\s/g, '');
-        const transparentValues = ['transparent', 'rgba(0,0,0,0)', 'rgba(0,0,0,0.0)', 'hsla(0,0%,0%,0)', 'hsla(0,0%,0%,0.0)'];
-        if (transparentValues.includes(normalized)) return true;
-        const alphaMatch = normalized.match(/(?:rgba|hsla)\([^,]+,[^,]+,[^,]+,\s*0(?:\.0+)?\s*\)/);
-        return !!alphaMatch;
-    }
-
-    getColorProperties() {
-        return [
-            'color',
-            'backgroundColor',
-            'backgroundImage',
-            'borderColor',
-            'borderTopColor',
-            'borderRightColor',
-            'borderBottomColor',
-            'borderLeftColor',
-            'borderBlockStartColor',
-            'borderBlockEndColor',
-            'borderInlineStartColor',
-            'borderInlineEndColor',
-            'outlineColor',
-            'boxShadow',
-            'textShadow',
-            'textDecorationColor',
-            'caretColor',
-            'accentColor',
-            'fill',
-            'stroke',
-            'floodColor',
-            'lightingColor',
-            'stopColor',
-            'columnRuleColor'
-        ];
-    }
-
-    applyColorMapping(value, isReverse = false) {
-        if (!value) return value;
-        let newValue = value;
-        const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
-
-        Object.entries(mappings).forEach(([original, replacement]) => {
-            const originalRgb = this.hexToRgb(original);
-            const replacementColor = replacement;
-
-            if (originalRgb) {
-                const hexPatterns = [
-                    new RegExp(original, 'gi'),
-                    new RegExp(original.substring(1), 'gi')
-                ];
-                hexPatterns.forEach(pattern => {
-                    newValue = newValue.replace(pattern, replacementColor);
-                });
-
-                const rgbPattern = new RegExp(
-                    `rgb\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`,
-                    'gi'
-                );
-                newValue = newValue.replace(rgbPattern, replacementColor);
-
-                const rgbaPattern = new RegExp(
-                    `rgba\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
-                    'gi'
-                );
-                if (replacement.startsWith('#')) {
-                    const replacementRgb = this.hexToRgb(replacement);
-                    if (replacementRgb) {
-                        newValue = newValue.replace(rgbaPattern, (match, alpha) => {
-                            return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
-                        });
-                    }
-                }
-            }
-        });
-
-        return newValue;
-    }
-
     hexToRgb(hex) {
         const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
         return result ? {
@@ -392,85 +461,98 @@ class ColorToggle extends HTMLElement {
     }
 
     containsTargetColors(value) {
-        if (!value || this.isTransparent(value)) return false;
+        if (!value) return false;
 
         const allColors = [...Object.keys(this.colorMappings), ...Object.values(this.colorMappings)];
 
         for (const color of allColors) {
+            // Direct color match
             if (value.includes(color)) return true;
+            if (value.includes(color.substring(1))) return true;
 
             const rgb = this.hexToRgb(color);
             if (rgb) {
-                const rgbString = `rgb(${rgb.r}, ${rgb.g}, ${rgb.b})`;
-                const rgbPattern = new RegExp(`rgb\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*\\)`, 'i');
-                if (value.match(rgbPattern)) return true;
+                // RGB format match
+                const rgbPattern = new RegExp(`rgb\\s*\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*\\)`, 'i');
+                const rgbaPattern = new RegExp(`rgba\\s*\\(\\s*${rgb.r}\\s*,\\s*${rgb.g}\\s*,\\s*${rgb.b}\\s*,`, 'i');
+                if (value.match(rgbPattern) || value.match(rgbaPattern)) return true;
+            }
+        }
+
+        // Check for CSS variables that might contain colors
+        if (value.includes('var(--')) {
+            const varMatches = value.match(/var\(--[^)]+\)/g);
+            if (varMatches) {
+                for (const varMatch of varMatches) {
+                    const varName = varMatch.match(/--[^)]+/)[0];
+                    const varValue = getComputedStyle(document.documentElement).getPropertyValue(varName);
+                    if (varValue && this.containsTargetColors(varValue)) {
+                        return true;
+                    }
+                }
             }
         }
 
         return false;
     }
 
-    processCSSVariables() {
-        const rootStyles = getComputedStyle(document.documentElement);
-        const inlineRootStyle = document.documentElement.getAttribute('style') || '';
+    applyColorMapping(value, isReverse = false) {
+        if (!value) return value;
+        let newValue = value;
+        const mappings = isReverse ? this.getReverseMappings() : this.colorMappings;
 
-        if (!this.originalCSSVariables.has('root')) {
-            const originalVars = {};
-            
-            for (let i = 0; i < rootStyles.length; i++) {
-                const property = rootStyles[i];
-                if (property.startsWith('--')) {
-                    const value = rootStyles.getPropertyValue(property);
-                    originalVars[property] = value;
-                }
-            }
-            
-            this.originalCSSVariables.set('root', {
-                inlineStyle: inlineRootStyle,
-                variables: originalVars
-            });
-        }
+        Object.entries(mappings).forEach(([original, replacement]) => {
+            const originalRgb = this.hexToRgb(original);
 
-        for (let i = 0; i < rootStyles.length; i++) {
-            const property = rootStyles[i];
-            if (property.startsWith('--')) {
-                const value = rootStyles.getPropertyValue(property);
-                if (this.containsTargetColors(value)) {
-                    const newValue = this.applyColorMapping(value, !this.isToggled);
-                    document.documentElement.style.setProperty(property, newValue);
-                }
-            }
-        }
-    }
+            if (originalRgb) {
+                // Handle hex patterns
+                const hexPatterns = [
+                    new RegExp(original, 'gi'),
+                    new RegExp(original.substring(1), 'gi')
+                ];
+                hexPatterns.forEach(pattern => {
+                    newValue = newValue.replace(pattern, replacement);
+                });
 
-    processStyleSheets() {
-        try {
-            Array.from(document.styleSheets).forEach((styleSheet, index) => {
-                try {
-                    if (!styleSheet.href || styleSheet.href.includes(window.location.origin)) {
-                        const sheetId = `stylesheet-${index}`;
-                        if (!this.processedStyleSheets.has(sheetId)) {
-                            Array.from(styleSheet.cssRules).forEach(rule => {
-                                if (rule.style) {
-                                    this.getColorProperties().forEach(property => {
-                                        const value = rule.style.getPropertyValue(property);
-                                        if (value && this.containsTargetColors(value)) {
-                                            const newValue = this.applyColorMapping(value, !this.isToggled);
-                                            rule.style.setProperty(property, newValue);
-                                        }
-                                    });
-                                }
-                            });
-                            this.processedStyleSheets.add(sheetId);
-                        }
+                // Handle rgb patterns
+                const rgbPattern = new RegExp(
+                    `rgb\\s*\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*\\)`,
+                    'gi'
+                );
+                newValue = newValue.replace(rgbPattern, replacement);
+
+                // Handle rgba patterns
+                const rgbaPattern = new RegExp(
+                    `rgba\\s*\\(\\s*${originalRgb.r}\\s*,\\s*${originalRgb.g}\\s*,\\s*${originalRgb.b}\\s*,\\s*([^)]+)\\)`,
+                    'gi'
+                );
+                if (replacement.startsWith('#')) {
+                    const replacementRgb = this.hexToRgb(replacement);
+                    if (replacementRgb) {
+                        newValue = newValue.replace(rgbaPattern, (match, alpha) => {
+                            return `rgba(${replacementRgb.r}, ${replacementRgb.g}, ${replacementRgb.b}, ${alpha})`;
+                        });
                     }
-                } catch (e) {
-                    // Skip CORS-restricted stylesheets
                 }
-            });
-        } catch (e) {
-            // Skip stylesheet access errors
+            }
+        });
+
+        // Handle CSS variables - replace var() calls with direct colors if they contain target colors
+        if (newValue.includes('var(--')) {
+            const varMatches = newValue.match(/var\(--[^)]+\)/g);
+            if (varMatches) {
+                varMatches.forEach(varMatch => {
+                    const varName = varMatch.match(/--[^)]+/)[0];
+                    const varValue = getComputedStyle(document.documentElement).getPropertyValue(varName);
+                    if (varValue && this.containsTargetColors(varValue)) {
+                        const mappedVarValue = this.applyColorMapping(varValue, isReverse);
+                        newValue = newValue.replace(varMatch, mappedVarValue);
+                    }
+                });
+            }
         }
+
+        return newValue;
     }
 
     toggleColors() {
@@ -484,32 +566,81 @@ class ColorToggle extends HTMLElement {
         }));
     }
 
+    isInteractiveElement(element) {
+        const tagName = element.tagName.toLowerCase();
+        const interactiveTags = ['button', 'a', 'input', 'select', 'textarea', 'label'];
+        
+        // Check if it's an interactive HTML element
+        if (interactiveTags.includes(tagName)) {
+            return true;
+        }
+        
+        // Check for interactive attributes
+        if (element.hasAttribute('onclick') || 
+            element.hasAttribute('onmousedown') || 
+            element.hasAttribute('onmouseup') ||
+            element.hasAttribute('href') ||
+            element.getAttribute('role') === 'button' ||
+            element.getAttribute('role') === 'link' ||
+            element.getAttribute('tabindex') !== null) {
+            return true;
+        }
+        
+        // Check for cursor pointer in computed styles
+        const computedStyle = window.getComputedStyle(element);
+        if (computedStyle.cursor === 'pointer') {
+            return true;
+        }
+        
+        // Check for common interactive class patterns
+        const className = element.className;
+        if (typeof className === 'string') {
+            const interactivePatterns = [
+                'btn', 'button', 'link', 'clickable', 'interactive', 
+                'action', 'trigger', 'toggle', 'tab', 'menu-item'
+            ];
+            if (interactivePatterns.some(pattern => className.toLowerCase().includes(pattern))) {
+                return true;
+            }
+        }
+        
+        return false;
+    }
+
     applyColorChanges() {
+        // Clear previous state
         this.revertColorChanges();
+
+        // Process CSS variables first (important for Wix backgrounds)
         this.processCSSVariables();
-        this.processStyleSheets();
 
+        // Find all elements that match Wix target classes or are containers
         const allElements = document.querySelectorAll('*');
-
+        
         allElements.forEach(element => {
-            if (!this.shouldProcessElement(element)) return;
-
+            if (element === this) return; // Skip the toggle itself
+            
+            // Process ALL elements, not just ones that match Wix classes - for better widget support
             const computedStyle = window.getComputedStyle(element);
             const originalStyles = {};
             let hasChanges = false;
+            const isInteractive = this.isInteractiveElement(element);
 
-            const originalInlineStyle = element.getAttribute('style') || '';
-            originalStyles.inlineStyle = originalInlineStyle;
+            // Store original inline style
+            originalStyles.inlineStyle = element.getAttribute('style') || '';
 
-            this.getColorProperties().forEach(property => {
+            // Expanded color properties including more background properties
+            const colorProperties = [
+                'color', 'backgroundColor', 'background', 'backgroundImage',
+                'fill', 'stroke', 'borderColor', 'borderTopColor', 'borderRightColor', 
+                'borderBottomColor', 'borderLeftColor', 'outlineColor', 'boxShadow'
+            ];
+            
+            colorProperties.forEach(property => {
                 const computedValue = computedStyle[property];
                 const currentInlineValue = element.style[property];
 
-                if (!computedValue || computedValue === 'none' || this.isTransparent(computedValue)) {
-                    return;
-                }
-
-                if (this.containsTargetColors(computedValue)) {
+                if (computedValue && this.containsTargetColors(computedValue)) {
                     originalStyles[property] = {
                         inline: currentInlineValue || '',
                         computed: computedValue
@@ -520,6 +651,22 @@ class ColorToggle extends HTMLElement {
                 }
             });
 
+            // Ensure interactive elements maintain their functionality
+            if (isInteractive && hasChanges) {
+                // Preserve cursor style for interactive elements
+                if (computedStyle.cursor === 'pointer' || element.style.cursor === 'pointer') {
+                    element.style.cursor = 'pointer';
+                }
+                // Ensure pointer events are not disabled
+                element.style.pointerEvents = 'auto';
+                // Preserve user-select for buttons (but allow text selection for text elements)
+                if (['button', 'a'].includes(element.tagName.toLowerCase()) || 
+                    element.getAttribute('role') === 'button') {
+                    element.style.userSelect = 'none';
+                }
+            }
+
+            // Handle SVG attributes
             if (element.tagName === 'svg' || element.closest('svg')) {
                 ['fill', 'stroke'].forEach(attr => {
                     const attrValue = element.getAttribute(attr);
@@ -533,8 +680,10 @@ class ColorToggle extends HTMLElement {
                 });
             }
 
+            // Handle data attributes that might contain colors
             Array.from(element.attributes).forEach(attr => {
-                if (attr.name.includes('color') && attr.value && this.containsTargetColors(attr.value)) {
+                if ((attr.name.includes('color') || attr.name.includes('background')) && 
+                    attr.value && this.containsTargetColors(attr.value)) {
                     if (!originalStyles.attributes) originalStyles.attributes = {};
                     originalStyles.attributes[attr.name] = attr.value;
                     const newValue = this.applyColorMapping(attr.value, false);
@@ -543,55 +692,46 @@ class ColorToggle extends HTMLElement {
                 }
             });
 
-            if (element.matches('[data-hook*="blog"], [class*="blog"], [id*="blog"]')) {
-                this.getColorProperties().forEach(property => {
-                    const computedValue = computedStyle[property];
-                    if (computedValue && this.containsTargetColors(computedValue)) {
-                        originalStyles[property] = originalStyles[property] || {
-                            inline: element.style[property] || '',
-                            computed: computedValue
-                        };
-                        const newValue = this.applyColorMapping(computedValue, false);
-                        element.style[property] = newValue;
-                        hasChanges = true;
-                    }
-                });
-            }
-
             if (hasChanges) {
                 this.originalStyles.set(element, originalStyles);
                 this.modifiedElements.add(element);
             }
         });
-
-        this.triggerDynamicElementUpdates();
     }
 
-    revertColorChanges() {
-        const rootOriginal = this.originalCSSVariables.get('root');
-        if (rootOriginal) {
-            if (rootOriginal.inlineStyle) {
-                document.documentElement.setAttribute('style', rootOriginal.inlineStyle);
-            } else {
-                document.documentElement.removeAttribute('style');
-            }
-            
-            Object.entries(rootOriginal.variables).forEach(([property, originalValue]) => {
-                const currentValue = getComputedStyle(document.documentElement).getPropertyValue(property);
-                if (this.containsTargetColors(currentValue) || this.containsTargetColors(originalValue)) {
-                    if (originalValue) {
-                        document.documentElement.style.setProperty(property, originalValue);
-                    } else {
-                        document.documentElement.style.removeProperty(property);
-                    }
-                }
+    processCSSVariables() {
+        // Process CSS variables on the root element (important for Wix themes)
+        const rootStyles = getComputedStyle(document.documentElement);
+        const originalRootStyle = document.documentElement.getAttribute('style') || '';
+        
+        if (!this.originalStyles.has(document.documentElement)) {
+            this.originalStyles.set(document.documentElement, {
+                inlineStyle: originalRootStyle
             });
         }
 
+        // Get all CSS custom properties and check if they contain target colors
+        for (let i = 0; i < rootStyles.length; i++) {
+            const property = rootStyles[i];
+            if (property.startsWith('--')) {
+                const value = rootStyles.getPropertyValue(property);
+                if (value && this.containsTargetColors(value)) {
+                    const newValue = this.applyColorMapping(value, false);
+                    document.documentElement.style.setProperty(property, newValue);
+                }
+            }
+        }
+    }
+
+    revertColorChanges() {
+        // Restore all modified elements to their exact original state
         this.modifiedElements.forEach(element => {
+            if (!element.isConnected) return; // Skip if element was removed from DOM
+            
             const originalStyles = this.originalStyles.get(element);
             if (!originalStyles) return;
 
+            // Restore exact original inline style
             if (originalStyles.inlineStyle !== undefined) {
                 if (originalStyles.inlineStyle) {
                     element.setAttribute('style', originalStyles.inlineStyle);
@@ -600,24 +740,7 @@ class ColorToggle extends HTMLElement {
                 }
             }
 
-            Object.entries(originalStyles).forEach(([property, originalValue]) => {
-                if (property === 'attributes' || property === 'inlineStyle') return;
-
-                if (typeof originalValue === 'object' && originalValue.inline !== undefined) {
-                    if (originalValue.inline !== '') {
-                        element.style[property] = originalValue.inline;
-                    } else {
-                        element.style.removeProperty(property);
-                    }
-                } else if (typeof originalValue === 'string') {
-                    if (originalValue !== '') {
-                        element.style[property] = originalValue;
-                    } else {
-                        element.style.removeProperty(property);
-                    }
-                }
-            });
-
+            // Restore attributes (SVG and data attributes)
             if (originalStyles.attributes) {
                 Object.entries(originalStyles.attributes).forEach(([attr, value]) => {
                     element.setAttribute(attr, value);
@@ -625,40 +748,49 @@ class ColorToggle extends HTMLElement {
             }
         });
 
+        // Restore CSS variables on root element
+        const rootOriginalStyles = this.originalStyles.get(document.documentElement);
+        if (rootOriginalStyles) {
+            if (rootOriginalStyles.inlineStyle) {
+                document.documentElement.setAttribute('style', rootOriginalStyles.inlineStyle);
+            } else {
+                document.documentElement.removeAttribute('style');
+            }
+        }
+
+        // Clear tracking
         this.modifiedElements.clear();
         this.originalStyles.clear();
-        this.originalCSSVariables.clear();
-        this.processedStyleSheets.clear();
-
-        this.triggerDynamicElementUpdates();
     }
 
-    shouldProcessElement(element) {
-        const skipTags = ['SCRIPT', 'STYLE', 'META', 'LINK', 'TITLE', 'HEAD'];
-        if (skipTags.includes(element.tagName)) return false;
-        if (element.getRootNode() !== document) return false;
-        return true;
-    }
-
-    triggerDynamicElementUpdates() {
-        // Removed display toggle to prevent scroll disruption
-        // Instead, use requestAnimationFrame to ensure style updates
-        requestAnimationFrame(() => {
-            window.dispatchEvent(new Event('resize'));
-            window.dispatchEvent(new CustomEvent('colorThemeChanged', {
-                detail: { isToggled: this.isToggled }
-            }));
-
-            const customElements = document.querySelectorAll('[data-color], [color], multi-axis-chart, [data-hook*="blog"], [class*="blog"], [id*="blog"]');
-            customElements.forEach(el => {
-                if (el.refresh && typeof el.refresh === 'function') {
-                    el.refresh();
-                }
-                if (el.updateChart && typeof el.updateChart === 'function') {
-                    el.updateChart();
-                }
-            });
+    // Debug method to see what elements are being processed
+    debugProcessedElements() {
+        const processed = [];
+        const allElements = document.querySelectorAll('*');
+        
+        allElements.forEach(element => {
+            if (element === this) return;
+            
+            const computedStyle = window.getComputedStyle(element);
+            const hasTargetColors = this.containsTargetColors(computedStyle.backgroundColor) || this.containsTargetColors(computedStyle.color);
+            
+            if (hasTargetColors) {
+                processed.push({
+                    element: element,
+                    tagName: element.tagName,
+                    className: element.className,
+                    id: element.id,
+                    backgroundColor: computedStyle.backgroundColor,
+                    color: computedStyle.color,
+                    isContainer: this.isBackgroundContainer(element),
+                    matchesWixClass: this.matchesWixClass(element)
+                });
+            }
         });
+        
+        console.log('Elements with target colors:', processed);
+        console.log('Total elements processed:', processed.length);
+        return processed;
     }
 }
 
