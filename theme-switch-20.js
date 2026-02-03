@@ -14,16 +14,16 @@
                 autoDetect: true,
                 flipIcons: false,
                 lightColors: [
-                    '#ffffff', '#f8f9fa', '#e9ecef', '#dee2e6', '#212529',
-                    '#343a40', '#495057', '#6c757d', '#adb5bd', '#ced4da',
-                    '#f1f3f5', '#e8eaed', '#d1d5db', '#9ca3af', '#6b7280',
-                    '#4b5563', '#374151', '#1f2937', '#111827', '#030712'
+                    '#fdf8f3', '#f8f0e8', '#e7d4c3', '#8e7055', '#3d2817',
+                    '#c27803', '#0d8a5f', '#c73429', '#1a0e08', '#814379',
+                    '#814379', '#814379', '#814379', '#814379', '#814379',
+                    '#814379', '#814379', '#814379', '#814379', '#814379'
                 ],
                 darkColors: [
-                    '#1a1a1a', '#2d2d2d', '#1e1e1e', '#404040', '#e9ecef',
-                    '#d0d0d0', '#b8b8b8', '#a0a0a0', '#606060', '#4a4a4a',
-                    '#0a0a0a', '#121212', '#1c1c1c', '#262626', '#303030',
-                    '#3a3a3a', '#444444', '#4e4e4e', '#585858', '#626262'
+                    '#14181c', '#1f262d', '#364049', '#b8c4d0', '#f2f5f8',
+                    '#4a90e2', '#2ecc71', '#e74c3c', '#080a0c', '#814379',
+                    '#814379', '#814379', '#814379', '#814379', '#814379',
+                    '#814379', '#814379', '#814379', '#814379', '#814379'
                 ],
                 currentTheme: 'light'
             };
@@ -447,6 +447,8 @@
                     stroke: computedStyle.stroke,
                     backgroundImage: computedStyle.backgroundImage,
                     webkitTextFillColor: computedStyle.webkitTextFillColor || computedStyle.getPropertyValue('-webkit-text-fill-color'),
+                    boxShadow: computedStyle.boxShadow,
+                    textShadow: computedStyle.textShadow,
                     // Store element's inline styles to preserve them
                     inlineBackgroundColor: element.style.backgroundColor,
                     inlineColor: element.style.color
@@ -581,6 +583,36 @@
             return converted;
         }
 
+        convertBoxShadow(shadowString, toDark) {
+            if (!shadowString || shadowString === 'none') {
+                return shadowString;
+            }
+
+            // Convert colors in box-shadow and text-shadow
+            // Format: offset-x offset-y blur-radius spread-radius color
+            let converted = shadowString.replace(/#[0-9a-f]{3,6}/gi, (match) => {
+                return this.convertColor(match, toDark) || match;
+            });
+
+            converted = converted.replace(/rgba?\([^)]+\)/gi, (match) => {
+                return this.convertColor(match, toDark) || match;
+            });
+
+            // Handle multiple shadows separated by commas
+            if (converted.includes(',')) {
+                const shadows = converted.split(/,(?![^(]*\))/);
+                converted = shadows.map(shadow => {
+                    return shadow.replace(/#[0-9a-f]{3,6}/gi, (match) => {
+                        return this.convertColor(match, toDark) || match;
+                    }).replace(/rgba?\([^)]+\)/gi, (match) => {
+                        return this.convertColor(match, toDark) || match;
+                    });
+                }).join(',');
+            }
+
+            return converted;
+        }
+
         changeTheme() {
             this.themeChangeInProgress = true;
             
@@ -684,6 +716,8 @@
                         element.style.webkitTextFillColor = '';
                         element.style.webkitBackgroundClip = '';
                         element.style.backgroundClip = '';
+                        element.style.boxShadow = '';
+                        element.style.textShadow = '';
                         restoredCount++;
                     } catch (e) {
                         // Element not accessible, skip
@@ -718,6 +752,8 @@
                                 shadowEl.style.webkitTextFillColor = '';
                                 shadowEl.style.webkitBackgroundClip = '';
                                 shadowEl.style.backgroundClip = '';
+                                shadowEl.style.boxShadow = '';
+                                shadowEl.style.textShadow = '';
                             } catch (e) {
                                 // Element not accessible, skip
                             }
@@ -801,6 +837,24 @@
                         element.style.backgroundImage = newGradient;
                         element.style.webkitBackgroundClip = 'text';
                         element.style.backgroundClip = 'text';
+                    }
+                }
+
+                // Convert box-shadow colors
+                if (original.boxShadow && original.boxShadow !== 'none') {
+                    const newBoxShadow = this.convertBoxShadow(original.boxShadow, toDark);
+                    if (newBoxShadow) {
+                        element.style.boxShadow = newBoxShadow;
+                        element.style.transition = 'box-shadow 0.3s ease';
+                    }
+                }
+
+                // Convert text-shadow colors
+                if (original.textShadow && original.textShadow !== 'none') {
+                    const newTextShadow = this.convertBoxShadow(original.textShadow, toDark);
+                    if (newTextShadow) {
+                        element.style.textShadow = newTextShadow;
+                        element.style.transition = 'text-shadow 0.3s ease';
                     }
                 }
 
