@@ -1,6 +1,7 @@
 class ProductSEODashboard extends HTMLElement {
     constructor() {
         super();
+        console.log('🔷 Dashboard Constructor: Initializing...');
         this._shadow = this.attachShadow({ mode: 'open' });
         this._products = [];
         this._seoItems = [];
@@ -11,6 +12,9 @@ class ProductSEODashboard extends HTMLElement {
         this._editMode = false;
         this._isInitialized = false;
         this._root = document.createElement('div');
+        
+        console.log('🔷 Dashboard Constructor: Creating shadow DOM structure...');
+        
         this._root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -50,7 +54,6 @@ class ProductSEODashboard extends HTMLElement {
                     min-height: 600px;
                     display: flex;
                     flex-direction: column;
-                    overflow: hidden;
                 }
                 
                 .dashboard-header {
@@ -698,29 +701,48 @@ class ProductSEODashboard extends HTMLElement {
         `;
         
         this._shadow.appendChild(this._root);
+        console.log('🔷 Dashboard Constructor: Shadow DOM created');
+        
         this._setupEventListeners();
+        console.log('🔷 Dashboard Constructor: Event listeners set up');
+        console.log('🔷 Dashboard Constructor: Complete');
     }
     
     static get observedAttributes() {
+        console.log('🔷 Dashboard: observedAttributes called');
         return ['product-data', 'notification'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
+        console.log(`🔷 Dashboard attributeChangedCallback: ${name}`, {
+            oldValue: oldValue ? oldValue.substring(0, 50) + '...' : null,
+            newValue: newValue ? newValue.substring(0, 50) + '...' : null,
+            fullNewValue: newValue
+        });
+        
         if (name === 'product-data' && newValue && newValue !== oldValue) {
             try {
-                console.log('Dashboard: Received product-data attribute');
+                console.log('🔷 Dashboard: Parsing product-data...');
                 const data = JSON.parse(newValue);
-                console.log('Dashboard: Parsed data:', data);
+                console.log('🔷 Dashboard: Parsed data successfully:', {
+                    productsCount: data.products?.length,
+                    totalCount: data.totalCount,
+                    seoItemsCount: data.seoItems?.length
+                });
                 this.setProducts(data);
             } catch (e) {
-                console.error('Dashboard: Error parsing product data:', e);
-                this._showError('Failed to parse product data');
+                console.error('🔷 Dashboard: ❌ Error parsing product data:', e);
+                console.error('🔷 Dashboard: Raw data:', newValue);
+                this._showError('Failed to parse product data: ' + e.message);
             }
         }
         
         if (name === 'notification' && newValue && newValue !== oldValue) {
             try {
+                console.log('🔷 Dashboard: Processing notification...');
                 const notification = JSON.parse(newValue);
+                console.log('🔷 Dashboard: Notification:', notification);
+                
                 if (notification.type === 'success') {
                     this._showToast('success', notification.message);
                     this._closeModal();
@@ -728,20 +750,28 @@ class ProductSEODashboard extends HTMLElement {
                     this._showToast('error', notification.message);
                 }
             } catch (e) {
-                console.error('Dashboard: Error parsing notification:', e);
+                console.error('🔷 Dashboard: ❌ Error parsing notification:', e);
             }
         }
     }
     
     connectedCallback() {
-        console.log('Dashboard: Custom element connected to DOM');
-        // Don't trigger load here - let the widget do it
+        console.log('🔷 Dashboard connectedCallback: Element connected to DOM');
+        console.log('🔷 Dashboard: Element ID:', this.id);
+        console.log('🔷 Dashboard: Parent element:', this.parentElement);
         this._isInitialized = true;
     }
     
+    disconnectedCallback() {
+        console.log('🔷 Dashboard disconnectedCallback: Element removed from DOM');
+    }
+    
     _setupEventListeners() {
+        console.log('🔷 Dashboard: Setting up event listeners...');
+        
         // Pagination
         this._shadow.getElementById('prevPage').addEventListener('click', () => {
+            console.log('🔷 Dashboard: Previous page clicked');
             if (this._currentPage > 0) {
                 this._currentPage--;
                 this._loadProducts();
@@ -749,46 +779,57 @@ class ProductSEODashboard extends HTMLElement {
         });
         
         this._shadow.getElementById('nextPage').addEventListener('click', () => {
+            console.log('🔷 Dashboard: Next page clicked');
             this._currentPage++;
             this._loadProducts();
         });
         
         // Retry button
         this._shadow.getElementById('retryBtn').addEventListener('click', () => {
+            console.log('🔷 Dashboard: Retry button clicked');
             this._loadProducts();
         });
         
         // Modal close
         this._shadow.getElementById('closeModal').addEventListener('click', () => {
+            console.log('🔷 Dashboard: Close modal clicked');
             this._closeModal();
         });
         
         this._shadow.getElementById('seoModal').addEventListener('click', (e) => {
             if (e.target.id === 'seoModal') {
+                console.log('🔷 Dashboard: Modal overlay clicked');
                 this._closeModal();
             }
         });
+        
+        console.log('🔷 Dashboard: Event listeners setup complete');
     }
     
     _dispatchEvent(eventName, detail) {
-        console.log('Dashboard: Dispatching event:', eventName, detail);
+        console.log('🔷 Dashboard: 📤 Dispatching event:', eventName, detail);
         const event = new CustomEvent(eventName, {
             detail: detail,
             bubbles: true,
             composed: true
         });
         this.dispatchEvent(event);
+        console.log('🔷 Dashboard: ✅ Event dispatched:', eventName);
     }
     
     _loadProducts() {
-        console.log('Dashboard: Loading products...');
+        console.log('🔷 Dashboard: _loadProducts called', {
+            currentPage: this._currentPage,
+            pageSize: this._pageSize,
+            skip: this._currentPage * this._pageSize
+        });
         
         const loadingContainer = this._shadow.getElementById('loadingContainer');
         const productsContainer = this._shadow.getElementById('productsContainer');
         const emptyState = this._shadow.getElementById('emptyState');
         const errorState = this._shadow.getElementById('errorState');
         
-        // Show loading
+        console.log('🔷 Dashboard: Showing loading state...');
         loadingContainer.classList.add('active');
         productsContainer.classList.remove('active');
         emptyState.classList.remove('active');
@@ -802,13 +843,18 @@ class ProductSEODashboard extends HTMLElement {
             });
             
         } catch (error) {
-            console.error('Dashboard: Error dispatching load-products event:', error);
-            this._showError('Failed to load products');
+            console.error('🔷 Dashboard: ❌ Error dispatching load-products event:', error);
+            this._showError('Failed to load products: ' + error.message);
         }
     }
     
     setProducts(data) {
-        console.log('Dashboard: Setting products:', data);
+        console.log('🔷 Dashboard: setProducts called with data:', {
+            productsCount: data.products?.length,
+            totalCount: data.totalCount,
+            seoItemsCount: data.seoItems?.length,
+            fullData: data
+        });
         
         this._products = data.products || [];
         this._totalProducts = data.totalCount || 0;
@@ -819,25 +865,28 @@ class ProductSEODashboard extends HTMLElement {
         const emptyState = this._shadow.getElementById('emptyState');
         const errorState = this._shadow.getElementById('errorState');
         
-        // Hide loading
+        console.log('🔷 Dashboard: Hiding loading state...');
         loadingContainer.classList.remove('active');
         errorState.classList.remove('active');
         
         if (this._products.length === 0) {
-            console.log('Dashboard: No products found');
+            console.log('🔷 Dashboard: No products found, showing empty state');
             emptyState.classList.add('active');
             productsContainer.classList.remove('active');
         } else {
-            console.log('Dashboard: Rendering', this._products.length, 'products');
+            console.log('🔷 Dashboard: Rendering', this._products.length, 'products');
             emptyState.classList.remove('active');
             productsContainer.classList.add('active');
             this._renderProducts();
             this._updateStats();
             this._updatePagination();
+            console.log('🔷 Dashboard: Products rendered successfully');
         }
     }
     
     _showError(message) {
+        console.error('🔷 Dashboard: ❌ Showing error:', message);
+        
         const loadingContainer = this._shadow.getElementById('loadingContainer');
         const productsContainer = this._shadow.getElementById('productsContainer');
         const emptyState = this._shadow.getElementById('emptyState');
@@ -852,12 +901,15 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _renderProducts() {
+        console.log('🔷 Dashboard: _renderProducts called');
         const grid = this._shadow.getElementById('productsGrid');
         grid.innerHTML = '';
         
-        console.log('Dashboard: Rendering products grid');
+        console.log('🔷 Dashboard: Creating product cards for', this._products.length, 'products');
         
-        this._products.forEach(product => {
+        this._products.forEach((product, index) => {
+            console.log(`🔷 Dashboard: Rendering product ${index + 1}:`, product.name);
+            
             const seoItem = this._seoItems.find(item => 
                 item.productId === product.id || item.title === product.name
             );
@@ -866,6 +918,7 @@ class ProductSEODashboard extends HTMLElement {
             card.className = 'product-card';
             
             const hasSEO = !!seoItem;
+            console.log(`🔷 Dashboard: Product "${product.name}" has SEO:`, hasSEO);
             
             card.innerHTML = `
                 <img src="${product.imageUrl}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/400'">
@@ -915,6 +968,7 @@ class ProductSEODashboard extends HTMLElement {
             buttons.forEach(button => {
                 button.addEventListener('click', () => {
                     const action = button.dataset.action;
+                    console.log(`🔷 Dashboard: Button clicked - Action: ${action}, Product: ${product.name}`);
                     this._handleAction(action, card._productData, card._seoData);
                 });
             });
@@ -922,10 +976,11 @@ class ProductSEODashboard extends HTMLElement {
             grid.appendChild(card);
         });
         
-        console.log('Dashboard: Products rendered');
+        console.log('🔷 Dashboard: ✅ All products rendered successfully');
     }
     
     _updateStats() {
+        console.log('🔷 Dashboard: Updating stats...');
         this._shadow.getElementById('totalProducts').textContent = this._totalProducts;
         
         const seoConfigured = this._seoItems.length;
@@ -933,9 +988,12 @@ class ProductSEODashboard extends HTMLElement {
         
         this._shadow.getElementById('seoConfigured').textContent = seoConfigured;
         this._shadow.getElementById('needsSetup').textContent = needsSetup;
+        
+        console.log('🔷 Dashboard: Stats updated:', { total: this._totalProducts, configured: seoConfigured, needsSetup });
     }
     
     _updatePagination() {
+        console.log('🔷 Dashboard: Updating pagination...');
         const pagination = this._shadow.getElementById('pagination');
         const prevBtn = this._shadow.getElementById('prevPage');
         const nextBtn = this._shadow.getElementById('nextPage');
@@ -952,13 +1010,16 @@ class ProductSEODashboard extends HTMLElement {
             const start = this._currentPage * this._pageSize + 1;
             const end = Math.min((this._currentPage + 1) * this._pageSize, this._totalProducts);
             info.textContent = `Showing ${start}-${end} of ${this._totalProducts} products`;
+            
+            console.log('🔷 Dashboard: Pagination visible:', { currentPage: this._currentPage, totalPages, start, end });
         } else {
             pagination.style.display = 'none';
+            console.log('🔷 Dashboard: Pagination hidden (only 1 page)');
         }
     }
     
     _handleAction(action, product, seoData) {
-        console.log('Dashboard: Handling action:', action, product.name);
+        console.log('🔷 Dashboard: _handleAction called:', { action, product: product.name, hasSeoData: !!seoData });
         
         switch (action) {
             case 'set':
@@ -974,7 +1035,7 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _openSEOBuilder(product, seoData, isEdit) {
-        console.log('Dashboard: Opening SEO builder for:', product.name);
+        console.log('🔷 Dashboard: Opening SEO builder:', { product: product.name, isEdit });
         
         this._selectedProduct = product;
         this._editMode = isEdit;
@@ -995,17 +1056,20 @@ class ProductSEODashboard extends HTMLElement {
                     ? JSON.parse(seoData.seoData) 
                     : seoData.seoData;
                 seoBuilder.setAttribute('seo-data', JSON.stringify(parsedData));
+                console.log('🔷 Dashboard: SEO data set on builder');
             } catch (e) {
-                console.error('Dashboard: Error parsing SEO data:', e);
+                console.error('🔷 Dashboard: ❌ Error parsing SEO data for builder:', e);
             }
         }
         
         // Listen for save and cancel events
         seoBuilder.addEventListener('save', (e) => {
+            console.log('🔷 Dashboard: Save event received from builder');
             this._saveSEO(product, e.detail, seoData);
         });
         
         seoBuilder.addEventListener('cancel', () => {
+            console.log('🔷 Dashboard: Cancel event received from builder');
             this._closeModal();
         });
         
@@ -1013,10 +1077,12 @@ class ProductSEODashboard extends HTMLElement {
         modalBody.appendChild(seoBuilder);
         
         modal.classList.add('active');
+        console.log('🔷 Dashboard: Modal opened');
     }
     
     _saveSEO(product, seoData, existingSEO) {
-        console.log('Dashboard: Saving SEO for:', product.name);
+        console.log('🔷 Dashboard: _saveSEO called:', { product: product.name, existingSEO: !!existingSEO });
+        console.log('🔷 Dashboard: SEO data to save:', seoData);
         
         // Dispatch event to Velo to save SEO data
         this._dispatchEvent('save-seo', {
@@ -1027,11 +1093,14 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _deleteSEO(product, seoData) {
+        console.log('🔷 Dashboard: _deleteSEO called:', product.name);
+        
         if (!confirm(`Are you sure you want to delete SEO data for "${product.name}"?`)) {
+            console.log('🔷 Dashboard: Delete cancelled by user');
             return;
         }
         
-        console.log('Dashboard: Deleting SEO for:', product.name);
+        console.log('🔷 Dashboard: Delete confirmed, dispatching event');
         
         // Dispatch event to Velo to delete SEO data
         this._dispatchEvent('delete-seo', {
@@ -1041,6 +1110,7 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _closeModal() {
+        console.log('🔷 Dashboard: Closing modal');
         const modal = this._shadow.getElementById('seoModal');
         modal.classList.remove('active');
         this._selectedProduct = null;
@@ -1048,6 +1118,8 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _showToast(type, message) {
+        console.log('🔷 Dashboard: Showing toast:', { type, message });
+        
         const toast = this._shadow.getElementById('toastNotification');
         const toastMessage = this._shadow.getElementById('toastMessage');
         const toastIcon = toast.querySelector('.toast-icon');
@@ -1072,4 +1144,6 @@ class ProductSEODashboard extends HTMLElement {
 }
 
 // Register the custom element
+console.log('🔷 Dashboard: Registering custom element "product-seo-dashboard"');
 customElements.define('product-seo-dashboard', ProductSEODashboard);
+console.log('🔷 Dashboard: ✅ Custom element registered');
