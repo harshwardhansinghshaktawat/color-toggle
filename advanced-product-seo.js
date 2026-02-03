@@ -9,6 +9,7 @@ class ProductSEODashboard extends HTMLElement {
         this._totalProducts = 0;
         this._selectedProduct = null;
         this._editMode = false;
+        this._isInitialized = false;
         this._root = document.createElement('div');
         this._root.innerHTML = `
             <style>
@@ -31,7 +32,7 @@ class ProductSEODashboard extends HTMLElement {
                     --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1);
                     display: block;
                     width: 100%;
-                    height: 100%;
+                    min-height: 600px;
                     font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
                     font-size: 14px;
                     color: var(--text-primary);
@@ -46,7 +47,7 @@ class ProductSEODashboard extends HTMLElement {
                 
                 .dashboard-container {
                     width: 100%;
-                    height: 100%;
+                    min-height: 600px;
                     display: flex;
                     flex-direction: column;
                     overflow: hidden;
@@ -106,6 +107,7 @@ class ProductSEODashboard extends HTMLElement {
                     flex: 1;
                     overflow-y: auto;
                     padding: 24px;
+                    min-height: 400px;
                 }
                 
                 .content-wrapper {
@@ -114,11 +116,16 @@ class ProductSEODashboard extends HTMLElement {
                 }
                 
                 .loading-container {
-                    display: flex;
+                    display: none;
                     flex-direction: column;
                     align-items: center;
                     justify-content: center;
                     padding: 80px 20px;
+                    min-height: 400px;
+                }
+                
+                .loading-container.active {
+                    display: flex;
                 }
                 
                 .spinner {
@@ -312,6 +319,15 @@ class ProductSEODashboard extends HTMLElement {
                 .empty-state {
                     text-align: center;
                     padding: 80px 20px;
+                    display: none;
+                    min-height: 400px;
+                    justify-content: center;
+                    align-items: center;
+                    flex-direction: column;
+                }
+                
+                .empty-state.active {
+                    display: flex;
                 }
                 
                 .empty-icon {
@@ -331,6 +347,52 @@ class ProductSEODashboard extends HTMLElement {
                 .empty-message {
                     font-size: 14px;
                     color: var(--text-secondary);
+                }
+                
+                .error-state {
+                    text-align: center;
+                    padding: 80px 20px;
+                    display: none;
+                    min-height: 400px;
+                    justify-content: center;
+                    align-items: center;
+                    flex-direction: column;
+                }
+                
+                .error-state.active {
+                    display: flex;
+                }
+                
+                .error-icon {
+                    width: 64px;
+                    height: 64px;
+                    margin: 0 auto 16px;
+                    color: var(--error-color);
+                }
+                
+                .error-title {
+                    font-size: 20px;
+                    font-weight: 600;
+                    color: var(--error-color);
+                    margin-bottom: 8px;
+                }
+                
+                .error-message {
+                    font-size: 14px;
+                    color: var(--text-secondary);
+                    margin-bottom: 16px;
+                }
+                
+                .retry-btn {
+                    margin-top: 16px;
+                }
+                
+                .products-container {
+                    display: none;
+                }
+                
+                .products-container.active {
+                    display: block;
                 }
                 
                 .modal-overlay {
@@ -406,26 +468,6 @@ class ProductSEODashboard extends HTMLElement {
                     flex: 1;
                     overflow-y: auto;
                     padding: 0;
-                }
-                
-                .error-message {
-                    background: #fef2f2;
-                    border: 1px solid #fecaca;
-                    border-radius: 8px;
-                    padding: 12px 16px;
-                    margin-bottom: 16px;
-                    color: #991b1b;
-                    font-size: 14px;
-                }
-                
-                .success-message {
-                    background: #f0fdf4;
-                    border: 1px solid #bbf7d0;
-                    border-radius: 8px;
-                    padding: 12px 16px;
-                    margin-bottom: 16px;
-                    color: #166534;
-                    font-size: 14px;
                 }
                 
                 .action-buttons {
@@ -587,12 +629,12 @@ class ProductSEODashboard extends HTMLElement {
                 
                 <div class="main-content">
                     <div class="content-wrapper">
-                        <div id="loadingContainer" class="loading-container">
+                        <div id="loadingContainer" class="loading-container active">
                             <div class="spinner"></div>
                             <div class="loading-text">Loading products...</div>
                         </div>
                         
-                        <div id="productsContainer" style="display: none;">
+                        <div id="productsContainer" class="products-container">
                             <div class="products-grid" id="productsGrid"></div>
                             
                             <div class="pagination" id="pagination" style="display: none;">
@@ -608,12 +650,24 @@ class ProductSEODashboard extends HTMLElement {
                             </div>
                         </div>
                         
-                        <div id="emptyState" class="empty-state" style="display: none;">
+                        <div id="emptyState" class="empty-state">
                             <svg class="empty-icon" viewBox="0 0 24 24" fill="currentColor">
                                 <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
                             </svg>
                             <h2 class="empty-title">No Products Found</h2>
                             <p class="empty-message">There are no products available in your store.</p>
+                        </div>
+                        
+                        <div id="errorState" class="error-state">
+                            <svg class="error-icon" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+                            </svg>
+                            <h2 class="error-title">Error Loading Products</h2>
+                            <p class="error-message" id="errorMessage">Failed to load products. Please try again.</p>
+                            <button class="btn btn-primary retry-btn" id="retryBtn">
+                                <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
+                                Retry
+                            </button>
                         </div>
                     </div>
                 </div>
@@ -654,10 +708,13 @@ class ProductSEODashboard extends HTMLElement {
     attributeChangedCallback(name, oldValue, newValue) {
         if (name === 'product-data' && newValue && newValue !== oldValue) {
             try {
+                console.log('Dashboard: Received product-data attribute');
                 const data = JSON.parse(newValue);
+                console.log('Dashboard: Parsed data:', data);
                 this.setProducts(data);
             } catch (e) {
-                console.error('Error parsing product data:', e);
+                console.error('Dashboard: Error parsing product data:', e);
+                this._showError('Failed to parse product data');
             }
         }
         
@@ -671,14 +728,15 @@ class ProductSEODashboard extends HTMLElement {
                     this._showToast('error', notification.message);
                 }
             } catch (e) {
-                console.error('Error parsing notification:', e);
+                console.error('Dashboard: Error parsing notification:', e);
             }
         }
     }
     
     connectedCallback() {
-        // Trigger initial load when element is connected to DOM
-        this._loadProducts();
+        console.log('Dashboard: Custom element connected to DOM');
+        // Don't trigger load here - let the widget do it
+        this._isInitialized = true;
     }
     
     _setupEventListeners() {
@@ -695,6 +753,11 @@ class ProductSEODashboard extends HTMLElement {
             this._loadProducts();
         });
         
+        // Retry button
+        this._shadow.getElementById('retryBtn').addEventListener('click', () => {
+            this._loadProducts();
+        });
+        
         // Modal close
         this._shadow.getElementById('closeModal').addEventListener('click', () => {
             this._closeModal();
@@ -708,6 +771,7 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _dispatchEvent(eventName, detail) {
+        console.log('Dashboard: Dispatching event:', eventName, detail);
         const event = new CustomEvent(eventName, {
             detail: detail,
             bubbles: true,
@@ -717,13 +781,18 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _loadProducts() {
+        console.log('Dashboard: Loading products...');
+        
         const loadingContainer = this._shadow.getElementById('loadingContainer');
         const productsContainer = this._shadow.getElementById('productsContainer');
         const emptyState = this._shadow.getElementById('emptyState');
+        const errorState = this._shadow.getElementById('errorState');
         
-        loadingContainer.style.display = 'flex';
-        productsContainer.style.display = 'none';
-        emptyState.style.display = 'none';
+        // Show loading
+        loadingContainer.classList.add('active');
+        productsContainer.classList.remove('active');
+        emptyState.classList.remove('active');
+        errorState.classList.remove('active');
         
         try {
             // Dispatch event to request products from Velo
@@ -733,13 +802,14 @@ class ProductSEODashboard extends HTMLElement {
             });
             
         } catch (error) {
-            console.error('Error loading products:', error);
-            loadingContainer.style.display = 'none';
-            emptyState.style.display = 'block';
+            console.error('Dashboard: Error dispatching load-products event:', error);
+            this._showError('Failed to load products');
         }
     }
     
     setProducts(data) {
+        console.log('Dashboard: Setting products:', data);
+        
         this._products = data.products || [];
         this._totalProducts = data.totalCount || 0;
         this._seoItems = data.seoItems || [];
@@ -747,24 +817,45 @@ class ProductSEODashboard extends HTMLElement {
         const loadingContainer = this._shadow.getElementById('loadingContainer');
         const productsContainer = this._shadow.getElementById('productsContainer');
         const emptyState = this._shadow.getElementById('emptyState');
+        const errorState = this._shadow.getElementById('errorState');
         
-        loadingContainer.style.display = 'none';
+        // Hide loading
+        loadingContainer.classList.remove('active');
+        errorState.classList.remove('active');
         
         if (this._products.length === 0) {
-            emptyState.style.display = 'block';
-            productsContainer.style.display = 'none';
+            console.log('Dashboard: No products found');
+            emptyState.classList.add('active');
+            productsContainer.classList.remove('active');
         } else {
-            emptyState.style.display = 'none';
-            productsContainer.style.display = 'block';
+            console.log('Dashboard: Rendering', this._products.length, 'products');
+            emptyState.classList.remove('active');
+            productsContainer.classList.add('active');
             this._renderProducts();
             this._updateStats();
             this._updatePagination();
         }
     }
     
+    _showError(message) {
+        const loadingContainer = this._shadow.getElementById('loadingContainer');
+        const productsContainer = this._shadow.getElementById('productsContainer');
+        const emptyState = this._shadow.getElementById('emptyState');
+        const errorState = this._shadow.getElementById('errorState');
+        const errorMessage = this._shadow.getElementById('errorMessage');
+        
+        loadingContainer.classList.remove('active');
+        productsContainer.classList.remove('active');
+        emptyState.classList.remove('active');
+        errorState.classList.add('active');
+        errorMessage.textContent = message;
+    }
+    
     _renderProducts() {
         const grid = this._shadow.getElementById('productsGrid');
         grid.innerHTML = '';
+        
+        console.log('Dashboard: Rendering products grid');
         
         this._products.forEach(product => {
             const seoItem = this._seoItems.find(item => 
@@ -775,11 +866,6 @@ class ProductSEODashboard extends HTMLElement {
             card.className = 'product-card';
             
             const hasSEO = !!seoItem;
-            
-            // Escape JSON for HTML attributes
-            const escapeJson = (obj) => {
-                return JSON.stringify(obj).replace(/"/g, '&quot;');
-            };
             
             card.innerHTML = `
                 <img src="${product.imageUrl}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/400'">
@@ -835,6 +921,8 @@ class ProductSEODashboard extends HTMLElement {
             
             grid.appendChild(card);
         });
+        
+        console.log('Dashboard: Products rendered');
     }
     
     _updateStats() {
@@ -870,6 +958,8 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _handleAction(action, product, seoData) {
+        console.log('Dashboard: Handling action:', action, product.name);
+        
         switch (action) {
             case 'set':
                 this._openSEOBuilder(product, null, false);
@@ -884,6 +974,8 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _openSEOBuilder(product, seoData, isEdit) {
+        console.log('Dashboard: Opening SEO builder for:', product.name);
+        
         this._selectedProduct = product;
         this._editMode = isEdit;
         
@@ -904,7 +996,7 @@ class ProductSEODashboard extends HTMLElement {
                     : seoData.seoData;
                 seoBuilder.setAttribute('seo-data', JSON.stringify(parsedData));
             } catch (e) {
-                console.error('Error parsing SEO data:', e);
+                console.error('Dashboard: Error parsing SEO data:', e);
             }
         }
         
@@ -924,6 +1016,8 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _saveSEO(product, seoData, existingSEO) {
+        console.log('Dashboard: Saving SEO for:', product.name);
+        
         // Dispatch event to Velo to save SEO data
         this._dispatchEvent('save-seo', {
             product: product,
@@ -936,6 +1030,8 @@ class ProductSEODashboard extends HTMLElement {
         if (!confirm(`Are you sure you want to delete SEO data for "${product.name}"?`)) {
             return;
         }
+        
+        console.log('Dashboard: Deleting SEO for:', product.name);
         
         // Dispatch event to Velo to delete SEO data
         this._dispatchEvent('delete-seo', {
