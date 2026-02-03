@@ -10,11 +10,51 @@ class ProductSEODashboard extends HTMLElement {
         this._totalProducts = 0;
         this._selectedProduct = null;
         this._editMode = false;
-        this._isInitialized = false;
+        this._showingForm = false;
         this._root = document.createElement('div');
         
-        console.log('🔷 Dashboard Constructor: Creating shadow DOM structure...');
+        this._createStructure();
+        this._setupEventListeners();
+        console.log('🔷 Dashboard Constructor: Complete');
+    }
+    
+    static get observedAttributes() {
+        return ['product-data', 'notification'];
+    }
+    
+    attributeChangedCallback(name, oldValue, newValue) {
+        console.log(`🔷 Dashboard attributeChangedCallback: ${name}`);
         
+        if (name === 'product-data' && newValue && newValue !== oldValue) {
+            try {
+                const data = JSON.parse(newValue);
+                console.log('🔷 Dashboard: Parsed data successfully');
+                this.setProducts(data);
+            } catch (e) {
+                console.error('🔷 Dashboard: Error parsing product data:', e);
+            }
+        }
+        
+        if (name === 'notification' && newValue && newValue !== oldValue) {
+            try {
+                const notification = JSON.parse(newValue);
+                if (notification.type === 'success') {
+                    this._showToast('success', notification.message);
+                    this._hideForm();
+                } else if (notification.type === 'error') {
+                    this._showToast('error', notification.message);
+                }
+            } catch (e) {
+                console.error('🔷 Dashboard: Error parsing notification:', e);
+            }
+        }
+    }
+    
+    connectedCallback() {
+        console.log('🔷 Dashboard connectedCallback: Element connected to DOM');
+    }
+    
+    _createStructure() {
         this._root.innerHTML = `
             <style>
                 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
@@ -108,7 +148,6 @@ class ProductSEODashboard extends HTMLElement {
                 
                 .main-content {
                     flex: 1;
-                    overflow-y: auto;
                     padding: 24px;
                     min-height: 400px;
                 }
@@ -118,38 +157,15 @@ class ProductSEODashboard extends HTMLElement {
                     margin: 0 auto;
                 }
                 
-                .loading-container {
+                .view-container {
                     display: none;
-                    flex-direction: column;
-                    align-items: center;
-                    justify-content: center;
-                    padding: 80px 20px;
-                    min-height: 400px;
                 }
                 
-                .loading-container.active {
-                    display: flex;
+                .view-container.active {
+                    display: block;
                 }
                 
-                .spinner {
-                    width: 48px;
-                    height: 48px;
-                    border: 4px solid var(--border-color);
-                    border-top-color: var(--primary-color);
-                    border-radius: 50%;
-                    animation: spin 0.8s linear infinite;
-                }
-                
-                @keyframes spin {
-                    to { transform: rotate(360deg); }
-                }
-                
-                .loading-text {
-                    margin-top: 16px;
-                    color: var(--text-secondary);
-                    font-size: 14px;
-                }
-                
+                /* Products Grid View */
                 .products-grid {
                     display: grid;
                     grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -306,15 +322,162 @@ class ProductSEODashboard extends HTMLElement {
                     color: #991b1b;
                 }
                 
-                .pagination {
+                .action-buttons {
+                    display: flex;
+                    gap: 8px;
+                }
+                
+                /* SEO Form View */
+                .seo-form-container {
+                    background: var(--bg-primary);
+                    border-radius: 12px;
+                    box-shadow: var(--shadow-md);
+                    overflow: hidden;
+                }
+                
+                .form-header {
+                    background: linear-gradient(135deg, var(--primary-color), #0056b3);
+                    color: white;
+                    padding: 20px 24px;
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                }
+                
+                .form-title {
+                    font-size: 20px;
+                    font-weight: 700;
+                }
+                
+                .form-close {
+                    background: none;
+                    border: none;
+                    color: white;
+                    font-size: 24px;
+                    cursor: pointer;
+                    width: 32px;
+                    height: 32px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    gap: 12px;
-                    padding: 24px 0;
+                    border-radius: 6px;
+                    transition: background 0.2s;
                 }
                 
-                .pagination-info {
+                .form-close:hover {
+                    background: rgba(255, 255, 255, 0.2);
+                }
+                
+                .form-body {
+                    padding: 24px;
+                    max-height: 60vh;
+                    overflow-y: auto;
+                }
+                
+                .form-group {
+                    margin-bottom: 20px;
+                }
+                
+                .form-label {
+                    display: block;
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                    color: var(--text-primary);
+                }
+                
+                .form-label.required::after {
+                    content: '*';
+                    color: var(--error-color);
+                    margin-left: 4px;
+                }
+                
+                .form-input,
+                .form-textarea,
+                .form-select {
+                    width: 100%;
+                    padding: 10px 12px;
+                    border: 1px solid var(--border-color);
+                    border-radius: 6px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    transition: border-color 0.2s;
+                }
+                
+                .form-input:focus,
+                .form-textarea:focus,
+                .form-select:focus {
+                    outline: none;
+                    border-color: var(--primary-color);
+                    box-shadow: 0 0 0 3px rgba(0, 112, 243, 0.1);
+                }
+                
+                .form-textarea {
+                    resize: vertical;
+                    min-height: 100px;
+                }
+                
+                .form-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 16px;
+                }
+                
+                .section-title {
+                    font-size: 16px;
+                    font-weight: 700;
+                    color: var(--text-primary);
+                    margin: 24px 0 16px 0;
+                    padding-bottom: 8px;
+                    border-bottom: 2px solid var(--border-color);
+                }
+                
+                .section-title:first-child {
+                    margin-top: 0;
+                }
+                
+                .help-text {
+                    font-size: 12px;
+                    color: var(--text-secondary);
+                    margin-top: 4px;
+                }
+                
+                .form-footer {
+                    padding: 16px 24px;
+                    background: var(--bg-secondary);
+                    border-top: 1px solid var(--border-color);
+                    display: flex;
+                    gap: 12px;
+                    justify-content: flex-end;
+                }
+                
+                .loading-container {
+                    display: none;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                    padding: 80px 20px;
+                    min-height: 400px;
+                }
+                
+                .loading-container.active {
+                    display: flex;
+                }
+                
+                .spinner {
+                    width: 48px;
+                    height: 48px;
+                    border: 4px solid var(--border-color);
+                    border-top-color: var(--primary-color);
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
+                }
+                
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
+                }
+                
+                .loading-text {
+                    margin-top: 16px;
                     color: var(--text-secondary);
                     font-size: 14px;
                 }
@@ -331,151 +494,6 @@ class ProductSEODashboard extends HTMLElement {
                 
                 .empty-state.active {
                     display: flex;
-                }
-                
-                .empty-icon {
-                    width: 64px;
-                    height: 64px;
-                    margin: 0 auto 16px;
-                    opacity: 0.3;
-                }
-                
-                .empty-title {
-                    font-size: 20px;
-                    font-weight: 600;
-                    color: var(--text-primary);
-                    margin-bottom: 8px;
-                }
-                
-                .empty-message {
-                    font-size: 14px;
-                    color: var(--text-secondary);
-                }
-                
-                .error-state {
-                    text-align: center;
-                    padding: 80px 20px;
-                    display: none;
-                    min-height: 400px;
-                    justify-content: center;
-                    align-items: center;
-                    flex-direction: column;
-                }
-                
-                .error-state.active {
-                    display: flex;
-                }
-                
-                .error-icon {
-                    width: 64px;
-                    height: 64px;
-                    margin: 0 auto 16px;
-                    color: var(--error-color);
-                }
-                
-                .error-title {
-                    font-size: 20px;
-                    font-weight: 600;
-                    color: var(--error-color);
-                    margin-bottom: 8px;
-                }
-                
-                .error-message {
-                    font-size: 14px;
-                    color: var(--text-secondary);
-                    margin-bottom: 16px;
-                }
-                
-                .retry-btn {
-                    margin-top: 16px;
-                }
-                
-                .products-container {
-                    display: none;
-                }
-                
-                .products-container.active {
-                    display: block;
-                }
-                
-                .modal-overlay {
-                    position: fixed;
-                    top: 0;
-                    left: 0;
-                    right: 0;
-                    bottom: 0;
-                    background: rgba(0, 0, 0, 0.6);
-                    display: none;
-                    align-items: center;
-                    justify-content: center;
-                    z-index: 1000;
-                    backdrop-filter: blur(4px);
-                    padding: 20px;
-                }
-                
-                .modal-overlay.active {
-                    display: flex;
-                }
-                
-                .modal-content {
-                    background: var(--bg-primary);
-                    border-radius: 16px;
-                    max-width: 900px;
-                    width: 100%;
-                    max-height: 90vh;
-                    overflow: hidden;
-                    box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.2);
-                    display: flex;
-                    flex-direction: column;
-                }
-                
-                .modal-header {
-                    padding: 24px;
-                    border-bottom: 1px solid var(--border-color);
-                    display: flex;
-                    align-items: center;
-                    justify-content: space-between;
-                    background: var(--bg-secondary);
-                }
-                
-                .modal-title {
-                    font-size: 20px;
-                    font-weight: 700;
-                    color: var(--text-primary);
-                }
-                
-                .modal-close {
-                    width: 32px;
-                    height: 32px;
-                    border: none;
-                    background: transparent;
-                    cursor: pointer;
-                    border-radius: 6px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    transition: background 0.2s;
-                }
-                
-                .modal-close:hover {
-                    background: var(--bg-tertiary);
-                }
-                
-                .modal-close svg {
-                    width: 20px;
-                    height: 20px;
-                    fill: var(--text-secondary);
-                }
-                
-                .modal-body {
-                    flex: 1;
-                    overflow-y: auto;
-                    padding: 0;
-                }
-                
-                .action-buttons {
-                    display: flex;
-                    gap: 8px;
                 }
                 
                 .toast-notification {
@@ -509,18 +527,6 @@ class ProductSEODashboard extends HTMLElement {
                     color: #991b1b;
                 }
                 
-                .toast-icon {
-                    width: 24px;
-                    height: 24px;
-                    flex-shrink: 0;
-                }
-                
-                .toast-message {
-                    flex: 1;
-                    font-size: 14px;
-                    font-weight: 500;
-                }
-                
                 @keyframes slideIn {
                     from {
                         transform: translateX(400px);
@@ -530,6 +536,19 @@ class ProductSEODashboard extends HTMLElement {
                         transform: translateX(0);
                         opacity: 1;
                     }
+                }
+                
+                .pagination {
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    gap: 12px;
+                    padding: 24px 0;
+                }
+                
+                .pagination-info {
+                    color: var(--text-secondary);
+                    font-size: 14px;
                 }
                 
                 /* Responsive */
@@ -551,30 +570,7 @@ class ProductSEODashboard extends HTMLElement {
                         gap: 16px;
                     }
                     
-                    .modal-content {
-                        max-width: 100%;
-                        max-height: 95vh;
-                        border-radius: 12px;
-                    }
-                    
-                    .stats-bar {
-                        gap: 12px;
-                    }
-                    
-                    .stat-item {
-                        flex: 1;
-                        min-width: 120px;
-                    }
-                    
-                    .toast-notification {
-                        right: 10px;
-                        left: 10px;
-                        min-width: auto;
-                    }
-                }
-                
-                @media (max-width: 480px) {
-                    .products-grid {
+                    .form-row {
                         grid-template-columns: 1fr;
                     }
                     
@@ -584,25 +580,17 @@ class ProductSEODashboard extends HTMLElement {
                 }
                 
                 /* Scrollbar styling */
-                .main-content::-webkit-scrollbar,
-                .modal-body::-webkit-scrollbar {
+                .form-body::-webkit-scrollbar {
                     width: 8px;
                 }
                 
-                .main-content::-webkit-scrollbar-track,
-                .modal-body::-webkit-scrollbar-track {
+                .form-body::-webkit-scrollbar-track {
                     background: var(--bg-secondary);
                 }
                 
-                .main-content::-webkit-scrollbar-thumb,
-                .modal-body::-webkit-scrollbar-thumb {
+                .form-body::-webkit-scrollbar-thumb {
                     background: var(--border-color);
                     border-radius: 4px;
-                }
-                
-                .main-content::-webkit-scrollbar-thumb:hover,
-                .modal-body::-webkit-scrollbar-thumb:hover {
-                    background: var(--text-tertiary);
                 }
             </style>
             
@@ -611,7 +599,7 @@ class ProductSEODashboard extends HTMLElement {
                     <div class="header-content">
                         <h1 class="dashboard-title">Product SEO Management</h1>
                         <p class="dashboard-subtitle">
-                            Manage structured data and rich snippets for your products to improve search visibility
+                            Manage structured data and rich snippets for your products
                         </p>
                         <div class="stats-bar">
                             <div class="stat-item">
@@ -632,138 +620,175 @@ class ProductSEODashboard extends HTMLElement {
                 
                 <div class="main-content">
                     <div class="content-wrapper">
+                        <!-- Loading View -->
                         <div id="loadingContainer" class="loading-container active">
                             <div class="spinner"></div>
                             <div class="loading-text">Loading products...</div>
                         </div>
                         
-                        <div id="productsContainer" class="products-container">
+                        <!-- Products Grid View -->
+                        <div id="productsView" class="view-container">
                             <div class="products-grid" id="productsGrid"></div>
-                            
                             <div class="pagination" id="pagination" style="display: none;">
-                                <button class="btn btn-secondary" id="prevPage" disabled>
-                                    <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
-                                    Previous
-                                </button>
+                                <button class="btn btn-secondary" id="prevPage" disabled>Previous</button>
                                 <span class="pagination-info" id="paginationInfo"></span>
-                                <button class="btn btn-secondary" id="nextPage" disabled>
-                                    Next
-                                    <svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
-                                </button>
+                                <button class="btn btn-secondary" id="nextPage" disabled>Next</button>
                             </div>
                         </div>
                         
-                        <div id="emptyState" class="empty-state">
-                            <svg class="empty-icon" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M19 3h-4.18C14.4 1.84 13.3 1 12 1c-1.3 0-2.4.84-2.82 2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm-7 0c.55 0 1 .45 1 1s-.45 1-1 1-1-.45-1-1 .45-1 1-1zm2 14H7v-2h7v2zm3-4H7v-2h10v2zm0-4H7V7h10v2z"/>
-                            </svg>
-                            <h2 class="empty-title">No Products Found</h2>
-                            <p class="empty-message">There are no products available in your store.</p>
+                        <!-- SEO Form View -->
+                        <div id="formView" class="view-container">
+                            <div class="seo-form-container">
+                                <div class="form-header">
+                                    <h2 class="form-title" id="formTitle">Set Product SEO</h2>
+                                    <button class="form-close" id="closeForm">×</button>
+                                </div>
+                                
+                                <div class="form-body">
+                                    <h3 class="section-title">Basic Information</h3>
+                                    
+                                    <div class="form-group">
+                                        <label class="form-label required">Product Name</label>
+                                        <input type="text" class="form-input" id="productName" required>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label class="form-label required">Description</label>
+                                        <textarea class="form-textarea" id="description" required></textarea>
+                                        <div class="help-text">Detailed product description for search engines</div>
+                                    </div>
+                                    
+                                    <h3 class="section-title">Product Identifiers</h3>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">SKU</label>
+                                            <input type="text" class="form-input" id="sku">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="form-label">MPN</label>
+                                            <input type="text" class="form-input" id="mpn">
+                                            <div class="help-text">Manufacturer Part Number</div>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-group">
+                                        <label class="form-label">GTIN</label>
+                                        <input type="text" class="form-input" id="gtin">
+                                        <div class="help-text">UPC, EAN, ISBN, or other GTIN</div>
+                                    </div>
+                                    
+                                    <h3 class="section-title">Brand</h3>
+                                    
+                                    <div class="form-group">
+                                        <label class="form-label">Brand Name</label>
+                                        <input type="text" class="form-input" id="brandName">
+                                    </div>
+                                    
+                                    <h3 class="section-title">Images</h3>
+                                    
+                                    <div class="form-group">
+                                        <label class="form-label">Image URLs</label>
+                                        <textarea class="form-textarea" id="imageUrls" rows="4"></textarea>
+                                        <div class="help-text">Enter one URL per line</div>
+                                    </div>
+                                    
+                                    <h3 class="section-title">Pricing & Availability</h3>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label required">Price</label>
+                                            <input type="number" step="0.01" class="form-input" id="price" required>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="form-label required">Currency</label>
+                                            <select class="form-select" id="priceCurrency" required>
+                                                <option value="USD">USD ($)</option>
+                                                <option value="EUR">EUR (€)</option>
+                                                <option value="GBP">GBP (£)</option>
+                                                <option value="INR">INR (₹)</option>
+                                                <option value="AUD">AUD (A$)</option>
+                                                <option value="CAD">CAD (C$)</option>
+                                                <option value="JPY">JPY (¥)</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Availability</label>
+                                            <select class="form-select" id="availability">
+                                                <option value="">Select availability</option>
+                                                <option value="https://schema.org/InStock">In Stock</option>
+                                                <option value="https://schema.org/OutOfStock">Out of Stock</option>
+                                                <option value="https://schema.org/PreOrder">Pre-Order</option>
+                                                <option value="https://schema.org/Discontinued">Discontinued</option>
+                                            </select>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="form-label">Condition</label>
+                                            <select class="form-select" id="itemCondition">
+                                                <option value="">Select condition</option>
+                                                <option value="https://schema.org/NewCondition">New</option>
+                                                <option value="https://schema.org/UsedCondition">Used</option>
+                                                <option value="https://schema.org/RefurbishedCondition">Refurbished</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <h3 class="section-title">Reviews & Ratings (Optional)</h3>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Average Rating</label>
+                                            <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue">
+                                            <div class="help-text">0 to 5 stars</div>
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="form-label">Review Count</label>
+                                            <input type="number" class="form-input" id="reviewCount">
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="form-row">
+                                        <div class="form-group">
+                                            <label class="form-label">Review Author</label>
+                                            <input type="text" class="form-input" id="reviewAuthor">
+                                        </div>
+                                        
+                                        <div class="form-group">
+                                            <label class="form-label">Review Rating</label>
+                                            <input type="number" min="1" max="5" class="form-input" id="reviewRating">
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <div class="form-footer">
+                                    <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                                    <button class="btn btn-primary" id="saveBtn">Save SEO Data</button>
+                                </div>
+                            </div>
                         </div>
                         
-                        <div id="errorState" class="error-state">
-                            <svg class="error-icon" viewBox="0 0 24 24" fill="currentColor">
-                                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-                            </svg>
-                            <h2 class="error-title">Error Loading Products</h2>
-                            <p class="error-message" id="errorMessage">Failed to load products. Please try again.</p>
-                            <button class="btn btn-primary retry-btn" id="retryBtn">
-                                <svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/></svg>
-                                Retry
-                            </button>
+                        <!-- Empty State -->
+                        <div id="emptyState" class="empty-state">
+                            <h2>No Products Found</h2>
+                            <p>There are no products available in your store.</p>
                         </div>
-                    </div>
-                </div>
-            </div>
-            
-            <div class="modal-overlay" id="seoModal">
-                <div class="modal-content">
-                    <div class="modal-header">
-                        <h2 class="modal-title" id="modalTitle">Configure Product SEO</h2>
-                        <button class="modal-close" id="closeModal">
-                            <svg viewBox="0 0 24 24">
-                                <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
-                            </svg>
-                        </button>
-                    </div>
-                    <div class="modal-body" id="modalBody">
-                        <!-- SEO Builder will be inserted here -->
                     </div>
                 </div>
             </div>
             
             <div class="toast-notification" id="toastNotification">
-                <svg class="toast-icon" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
-                </svg>
-                <div class="toast-message" id="toastMessage"></div>
+                <div id="toastMessage"></div>
             </div>
         `;
         
         this._shadow.appendChild(this._root);
-        console.log('🔷 Dashboard Constructor: Shadow DOM created');
-        
-        this._setupEventListeners();
-        console.log('🔷 Dashboard Constructor: Event listeners set up');
-        console.log('🔷 Dashboard Constructor: Complete');
-    }
-    
-    static get observedAttributes() {
-        console.log('🔷 Dashboard: observedAttributes called');
-        return ['product-data', 'notification'];
-    }
-    
-    attributeChangedCallback(name, oldValue, newValue) {
-        console.log(`🔷 Dashboard attributeChangedCallback: ${name}`, {
-            oldValue: oldValue ? oldValue.substring(0, 50) + '...' : null,
-            newValue: newValue ? newValue.substring(0, 50) + '...' : null,
-            fullNewValue: newValue
-        });
-        
-        if (name === 'product-data' && newValue && newValue !== oldValue) {
-            try {
-                console.log('🔷 Dashboard: Parsing product-data...');
-                const data = JSON.parse(newValue);
-                console.log('🔷 Dashboard: Parsed data successfully:', {
-                    productsCount: data.products?.length,
-                    totalCount: data.totalCount,
-                    seoItemsCount: data.seoItems?.length
-                });
-                this.setProducts(data);
-            } catch (e) {
-                console.error('🔷 Dashboard: ❌ Error parsing product data:', e);
-                console.error('🔷 Dashboard: Raw data:', newValue);
-                this._showError('Failed to parse product data: ' + e.message);
-            }
-        }
-        
-        if (name === 'notification' && newValue && newValue !== oldValue) {
-            try {
-                console.log('🔷 Dashboard: Processing notification...');
-                const notification = JSON.parse(newValue);
-                console.log('🔷 Dashboard: Notification:', notification);
-                
-                if (notification.type === 'success') {
-                    this._showToast('success', notification.message);
-                    this._closeModal();
-                } else if (notification.type === 'error') {
-                    this._showToast('error', notification.message);
-                }
-            } catch (e) {
-                console.error('🔷 Dashboard: ❌ Error parsing notification:', e);
-            }
-        }
-    }
-    
-    connectedCallback() {
-        console.log('🔷 Dashboard connectedCallback: Element connected to DOM');
-        console.log('🔷 Dashboard: Element ID:', this.id);
-        console.log('🔷 Dashboard: Parent element:', this.parentElement);
-        this._isInitialized = true;
-    }
-    
-    disconnectedCallback() {
-        console.log('🔷 Dashboard disconnectedCallback: Element removed from DOM');
     }
     
     _setupEventListeners() {
@@ -771,7 +796,6 @@ class ProductSEODashboard extends HTMLElement {
         
         // Pagination
         this._shadow.getElementById('prevPage').addEventListener('click', () => {
-            console.log('🔷 Dashboard: Previous page clicked');
             if (this._currentPage > 0) {
                 this._currentPage--;
                 this._loadProducts();
@@ -779,137 +803,83 @@ class ProductSEODashboard extends HTMLElement {
         });
         
         this._shadow.getElementById('nextPage').addEventListener('click', () => {
-            console.log('🔷 Dashboard: Next page clicked');
             this._currentPage++;
             this._loadProducts();
         });
         
-        // Retry button
-        this._shadow.getElementById('retryBtn').addEventListener('click', () => {
-            console.log('🔷 Dashboard: Retry button clicked');
-            this._loadProducts();
+        // Form buttons
+        this._shadow.getElementById('closeForm').addEventListener('click', () => {
+            this._hideForm();
         });
         
-        // Modal close
-        this._shadow.getElementById('closeModal').addEventListener('click', () => {
-            console.log('🔷 Dashboard: Close modal clicked');
-            this._closeModal();
+        this._shadow.getElementById('cancelBtn').addEventListener('click', () => {
+            this._hideForm();
         });
         
-        this._shadow.getElementById('seoModal').addEventListener('click', (e) => {
-            if (e.target.id === 'seoModal') {
-                console.log('🔷 Dashboard: Modal overlay clicked');
-                this._closeModal();
-            }
+        this._shadow.getElementById('saveBtn').addEventListener('click', () => {
+            this._handleSave();
         });
-        
-        console.log('🔷 Dashboard: Event listeners setup complete');
     }
     
     _dispatchEvent(eventName, detail) {
-        console.log('🔷 Dashboard: 📤 Dispatching event:', eventName, detail);
+        console.log('🔷 Dashboard: Dispatching event:', eventName);
         const event = new CustomEvent(eventName, {
             detail: detail,
             bubbles: true,
             composed: true
         });
         this.dispatchEvent(event);
-        console.log('🔷 Dashboard: ✅ Event dispatched:', eventName);
     }
     
     _loadProducts() {
-        console.log('🔷 Dashboard: _loadProducts called', {
-            currentPage: this._currentPage,
-            pageSize: this._pageSize,
-            skip: this._currentPage * this._pageSize
-        });
+        console.log('🔷 Dashboard: Loading products...');
         
         const loadingContainer = this._shadow.getElementById('loadingContainer');
-        const productsContainer = this._shadow.getElementById('productsContainer');
+        const productsView = this._shadow.getElementById('productsView');
+        const formView = this._shadow.getElementById('formView');
         const emptyState = this._shadow.getElementById('emptyState');
-        const errorState = this._shadow.getElementById('errorState');
         
-        console.log('🔷 Dashboard: Showing loading state...');
         loadingContainer.classList.add('active');
-        productsContainer.classList.remove('active');
+        productsView.classList.remove('active');
+        formView.classList.remove('active');
         emptyState.classList.remove('active');
-        errorState.classList.remove('active');
         
-        try {
-            // Dispatch event to request products from Velo
-            this._dispatchEvent('load-products', {
-                limit: this._pageSize,
-                skip: this._currentPage * this._pageSize
-            });
-            
-        } catch (error) {
-            console.error('🔷 Dashboard: ❌ Error dispatching load-products event:', error);
-            this._showError('Failed to load products: ' + error.message);
-        }
+        this._dispatchEvent('load-products', {
+            limit: this._pageSize,
+            skip: this._currentPage * this._pageSize
+        });
     }
     
     setProducts(data) {
-        console.log('🔷 Dashboard: setProducts called with data:', {
-            productsCount: data.products?.length,
-            totalCount: data.totalCount,
-            seoItemsCount: data.seoItems?.length,
-            fullData: data
-        });
+        console.log('🔷 Dashboard: Setting products:', data.products.length);
         
         this._products = data.products || [];
         this._totalProducts = data.totalCount || 0;
         this._seoItems = data.seoItems || [];
         
         const loadingContainer = this._shadow.getElementById('loadingContainer');
-        const productsContainer = this._shadow.getElementById('productsContainer');
+        const productsView = this._shadow.getElementById('productsView');
         const emptyState = this._shadow.getElementById('emptyState');
-        const errorState = this._shadow.getElementById('errorState');
         
-        console.log('🔷 Dashboard: Hiding loading state...');
         loadingContainer.classList.remove('active');
-        errorState.classList.remove('active');
         
         if (this._products.length === 0) {
-            console.log('🔷 Dashboard: No products found, showing empty state');
             emptyState.classList.add('active');
-            productsContainer.classList.remove('active');
+            productsView.classList.remove('active');
         } else {
-            console.log('🔷 Dashboard: Rendering', this._products.length, 'products');
             emptyState.classList.remove('active');
-            productsContainer.classList.add('active');
+            productsView.classList.add('active');
             this._renderProducts();
             this._updateStats();
             this._updatePagination();
-            console.log('🔷 Dashboard: Products rendered successfully');
         }
     }
     
-    _showError(message) {
-        console.error('🔷 Dashboard: ❌ Showing error:', message);
-        
-        const loadingContainer = this._shadow.getElementById('loadingContainer');
-        const productsContainer = this._shadow.getElementById('productsContainer');
-        const emptyState = this._shadow.getElementById('emptyState');
-        const errorState = this._shadow.getElementById('errorState');
-        const errorMessage = this._shadow.getElementById('errorMessage');
-        
-        loadingContainer.classList.remove('active');
-        productsContainer.classList.remove('active');
-        emptyState.classList.remove('active');
-        errorState.classList.add('active');
-        errorMessage.textContent = message;
-    }
-    
     _renderProducts() {
-        console.log('🔷 Dashboard: _renderProducts called');
         const grid = this._shadow.getElementById('productsGrid');
         grid.innerHTML = '';
         
-        console.log('🔷 Dashboard: Creating product cards for', this._products.length, 'products');
-        
-        this._products.forEach((product, index) => {
-            console.log(`🔷 Dashboard: Rendering product ${index + 1}:`, product.name);
-            
+        this._products.forEach((product) => {
             const seoItem = this._seoItems.find(item => 
                 item.productId === product.id || item.title === product.name
             );
@@ -918,19 +888,12 @@ class ProductSEODashboard extends HTMLElement {
             card.className = 'product-card';
             
             const hasSEO = !!seoItem;
-            console.log(`🔷 Dashboard: Product "${product.name}" has SEO:`, hasSEO);
             
             card.innerHTML = `
-                <img src="${product.imageUrl}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/400'">
+                <img src="${product.imageUrl}" alt="${product.name}" class="product-image">
                 <div class="product-info">
                     <div class="seo-status-badge ${hasSEO ? 'seo-status-active' : 'seo-status-none'}">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
-                            ${hasSEO 
-                                ? '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>'
-                                : '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>'
-                            }
-                        </svg>
-                        ${hasSEO ? 'SEO Active' : 'No SEO'}
+                        ${hasSEO ? '✓ SEO Active' : '✗ No SEO'}
                     </div>
                     <h3 class="product-name">${product.name}</h3>
                     <div class="product-price">
@@ -940,47 +903,214 @@ class ProductSEODashboard extends HTMLElement {
                     <div class="product-actions">
                         ${hasSEO ? `
                             <div class="action-buttons">
-                                <button class="btn btn-warning" data-action="edit">
-                                    <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-                                    Edit SEO
-                                </button>
-                                <button class="btn btn-danger" data-action="delete">
-                                    <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-                                    Delete
-                                </button>
+                                <button class="btn btn-warning edit-btn">Edit SEO</button>
+                                <button class="btn btn-danger delete-btn">Delete</button>
                             </div>
                         ` : `
-                            <button class="btn btn-primary" data-action="set">
-                                <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
-                                Set Product SEO
-                            </button>
+                            <button class="btn btn-primary set-btn">Set Product SEO</button>
                         `}
                     </div>
                 </div>
             `;
             
-            // Store product and SEO data on the card element
+            // Store data on card
             card._productData = product;
             card._seoData = seoItem;
             
-            // Add event listeners to buttons
-            const buttons = card.querySelectorAll('button');
-            buttons.forEach(button => {
-                button.addEventListener('click', () => {
-                    const action = button.dataset.action;
-                    console.log(`🔷 Dashboard: Button clicked - Action: ${action}, Product: ${product.name}`);
-                    this._handleAction(action, card._productData, card._seoData);
-                });
-            });
+            // Add event listeners
+            const setBtn = card.querySelector('.set-btn');
+            const editBtn = card.querySelector('.edit-btn');
+            const deleteBtn = card.querySelector('.delete-btn');
+            
+            if (setBtn) {
+                setBtn.addEventListener('click', () => this._showForm(product, null, false));
+            }
+            
+            if (editBtn) {
+                editBtn.addEventListener('click', () => this._showForm(product, seoItem, true));
+            }
+            
+            if (deleteBtn) {
+                deleteBtn.addEventListener('click', () => this._deleteSEO(product, seoItem));
+            }
             
             grid.appendChild(card);
         });
+    }
+    
+    _showForm(product, seoData, isEdit) {
+        console.log('🔷 Dashboard: Showing form for:', product.name, 'Edit:', isEdit);
         
-        console.log('🔷 Dashboard: ✅ All products rendered successfully');
+        this._selectedProduct = product;
+        this._editMode = isEdit;
+        this._showingForm = true;
+        
+        const formTitle = this._shadow.getElementById('formTitle');
+        formTitle.textContent = isEdit ? 'Edit Product SEO' : 'Set Product SEO';
+        
+        // Reset form
+        this._resetForm();
+        
+        // Set product name
+        this._shadow.getElementById('productName').value = product.name;
+        
+        // Populate form if editing
+        if (seoData && seoData.seoData) {
+            try {
+                const data = typeof seoData.seoData === 'string' 
+                    ? JSON.parse(seoData.seoData) 
+                    : seoData.seoData;
+                this._populateForm(data);
+            } catch (e) {
+                console.error('🔷 Dashboard: Error parsing SEO data:', e);
+            }
+        }
+        
+        // Show form view
+        const productsView = this._shadow.getElementById('productsView');
+        const formView = this._shadow.getElementById('formView');
+        
+        productsView.classList.remove('active');
+        formView.classList.add('active');
+        
+        // Scroll to top
+        this._shadow.querySelector('.form-body').scrollTop = 0;
+    }
+    
+    _hideForm() {
+        console.log('🔷 Dashboard: Hiding form');
+        
+        this._showingForm = false;
+        this._selectedProduct = null;
+        this._editMode = false;
+        
+        const productsView = this._shadow.getElementById('productsView');
+        const formView = this._shadow.getElementById('formView');
+        
+        formView.classList.remove('active');
+        productsView.classList.add('active');
+    }
+    
+    _resetForm() {
+        const inputs = this._shadow.querySelectorAll('.form-input, .form-textarea, .form-select');
+        inputs.forEach(input => {
+            if (input.tagName === 'SELECT') {
+                input.selectedIndex = 0;
+            } else {
+                input.value = '';
+            }
+        });
+    }
+    
+    _populateForm(data) {
+        console.log('🔷 Dashboard: Populating form with data');
+        
+        const fields = {
+            'productName': data.productName,
+            'description': data.description,
+            'sku': data.sku,
+            'mpn': data.mpn,
+            'gtin': data.gtin,
+            'brandName': data.brandName,
+            'price': data.price,
+            'priceCurrency': data.priceCurrency,
+            'availability': data.availability,
+            'itemCondition': data.itemCondition,
+            'aggregateRatingValue': data.aggregateRatingValue,
+            'reviewCount': data.reviewCount,
+            'reviewAuthor': data.reviewAuthor,
+            'reviewRating': data.reviewRating
+        };
+        
+        for (const [id, value] of Object.entries(fields)) {
+            const element = this._shadow.getElementById(id);
+            if (element && value !== undefined && value !== null) {
+                element.value = value;
+            }
+        }
+        
+        if (data.imageUrls && Array.isArray(data.imageUrls)) {
+            this._shadow.getElementById('imageUrls').value = data.imageUrls.join('\n');
+        }
+    }
+    
+    _collectFormData() {
+        const imageUrlsText = this._shadow.getElementById('imageUrls').value.trim();
+        const imageUrls = imageUrlsText ? imageUrlsText.split('\n').map(url => url.trim()).filter(url => url) : [];
+        
+        return {
+            productName: this._shadow.getElementById('productName').value.trim(),
+            description: this._shadow.getElementById('description').value.trim(),
+            sku: this._shadow.getElementById('sku').value.trim(),
+            mpn: this._shadow.getElementById('mpn').value.trim(),
+            gtin: this._shadow.getElementById('gtin').value.trim(),
+            brandName: this._shadow.getElementById('brandName').value.trim(),
+            imageUrls: imageUrls,
+            price: this._shadow.getElementById('price').value.trim(),
+            priceCurrency: this._shadow.getElementById('priceCurrency').value,
+            availability: this._shadow.getElementById('availability').value,
+            itemCondition: this._shadow.getElementById('itemCondition').value,
+            aggregateRatingValue: this._shadow.getElementById('aggregateRatingValue').value.trim(),
+            reviewCount: this._shadow.getElementById('reviewCount').value.trim(),
+            reviewAuthor: this._shadow.getElementById('reviewAuthor').value.trim(),
+            reviewRating: this._shadow.getElementById('reviewRating').value.trim()
+        };
+    }
+    
+    _handleSave() {
+        console.log('🔷 Dashboard: Handling save');
+        
+        // Validation
+        const productName = this._shadow.getElementById('productName').value.trim();
+        const description = this._shadow.getElementById('description').value.trim();
+        const price = this._shadow.getElementById('price').value.trim();
+        const currency = this._shadow.getElementById('priceCurrency').value;
+        
+        if (!productName) {
+            alert('Please enter a product name');
+            return;
+        }
+        
+        if (!description) {
+            alert('Please enter a description');
+            return;
+        }
+        
+        if (!price) {
+            alert('Please enter a price');
+            return;
+        }
+        
+        if (!currency) {
+            alert('Please select a currency');
+            return;
+        }
+        
+        const seoData = this._collectFormData();
+        
+        const existingSEO = this._seoItems.find(item => 
+            item.productId === this._selectedProduct.id || item.title === this._selectedProduct.name
+        );
+        
+        this._dispatchEvent('save-seo', {
+            product: this._selectedProduct,
+            seoData: seoData,
+            existingSEO: existingSEO
+        });
+    }
+    
+    _deleteSEO(product, seoData) {
+        if (!confirm(`Delete SEO data for "${product.name}"?`)) {
+            return;
+        }
+        
+        this._dispatchEvent('delete-seo', {
+            product: product,
+            seoData: seoData
+        });
     }
     
     _updateStats() {
-        console.log('🔷 Dashboard: Updating stats...');
         this._shadow.getElementById('totalProducts').textContent = this._totalProducts;
         
         const seoConfigured = this._seoItems.length;
@@ -988,12 +1118,9 @@ class ProductSEODashboard extends HTMLElement {
         
         this._shadow.getElementById('seoConfigured').textContent = seoConfigured;
         this._shadow.getElementById('needsSetup').textContent = needsSetup;
-        
-        console.log('🔷 Dashboard: Stats updated:', { total: this._totalProducts, configured: seoConfigured, needsSetup });
     }
     
     _updatePagination() {
-        console.log('🔷 Dashboard: Updating pagination...');
         const pagination = this._shadow.getElementById('pagination');
         const prevBtn = this._shadow.getElementById('prevPage');
         const nextBtn = this._shadow.getElementById('nextPage');
@@ -1003,147 +1130,29 @@ class ProductSEODashboard extends HTMLElement {
         
         if (totalPages > 1) {
             pagination.style.display = 'flex';
-            
             prevBtn.disabled = this._currentPage === 0;
             nextBtn.disabled = this._currentPage >= totalPages - 1;
             
             const start = this._currentPage * this._pageSize + 1;
             const end = Math.min((this._currentPage + 1) * this._pageSize, this._totalProducts);
-            info.textContent = `Showing ${start}-${end} of ${this._totalProducts} products`;
-            
-            console.log('🔷 Dashboard: Pagination visible:', { currentPage: this._currentPage, totalPages, start, end });
+            info.textContent = `${start}-${end} of ${this._totalProducts}`;
         } else {
             pagination.style.display = 'none';
-            console.log('🔷 Dashboard: Pagination hidden (only 1 page)');
         }
-    }
-    
-    _handleAction(action, product, seoData) {
-        console.log('🔷 Dashboard: _handleAction called:', { action, product: product.name, hasSeoData: !!seoData });
-        
-        switch (action) {
-            case 'set':
-                this._openSEOBuilder(product, null, false);
-                break;
-            case 'edit':
-                this._openSEOBuilder(product, seoData, true);
-                break;
-            case 'delete':
-                this._deleteSEO(product, seoData);
-                break;
-        }
-    }
-    
-    _openSEOBuilder(product, seoData, isEdit) {
-        console.log('🔷 Dashboard: Opening SEO builder:', { product: product.name, isEdit });
-        
-        this._selectedProduct = product;
-        this._editMode = isEdit;
-        
-        const modal = this._shadow.getElementById('seoModal');
-        const modalTitle = this._shadow.getElementById('modalTitle');
-        const modalBody = this._shadow.getElementById('modalBody');
-        
-        modalTitle.textContent = isEdit ? 'Edit Product SEO' : 'Set Product SEO';
-        
-        // Create SEO builder element
-        const seoBuilder = document.createElement('product-seo-builder');
-        seoBuilder.setAttribute('product-name', product.name);
-        
-        if (seoData && seoData.seoData) {
-            try {
-                const parsedData = typeof seoData.seoData === 'string' 
-                    ? JSON.parse(seoData.seoData) 
-                    : seoData.seoData;
-                seoBuilder.setAttribute('seo-data', JSON.stringify(parsedData));
-                console.log('🔷 Dashboard: SEO data set on builder');
-            } catch (e) {
-                console.error('🔷 Dashboard: ❌ Error parsing SEO data for builder:', e);
-            }
-        }
-        
-        // Listen for save and cancel events
-        seoBuilder.addEventListener('save', (e) => {
-            console.log('🔷 Dashboard: Save event received from builder');
-            this._saveSEO(product, e.detail, seoData);
-        });
-        
-        seoBuilder.addEventListener('cancel', () => {
-            console.log('🔷 Dashboard: Cancel event received from builder');
-            this._closeModal();
-        });
-        
-        modalBody.innerHTML = '';
-        modalBody.appendChild(seoBuilder);
-        
-        modal.classList.add('active');
-        console.log('🔷 Dashboard: Modal opened');
-    }
-    
-    _saveSEO(product, seoData, existingSEO) {
-        console.log('🔷 Dashboard: _saveSEO called:', { product: product.name, existingSEO: !!existingSEO });
-        console.log('🔷 Dashboard: SEO data to save:', seoData);
-        
-        // Dispatch event to Velo to save SEO data
-        this._dispatchEvent('save-seo', {
-            product: product,
-            seoData: seoData,
-            existingSEO: existingSEO
-        });
-    }
-    
-    _deleteSEO(product, seoData) {
-        console.log('🔷 Dashboard: _deleteSEO called:', product.name);
-        
-        if (!confirm(`Are you sure you want to delete SEO data for "${product.name}"?`)) {
-            console.log('🔷 Dashboard: Delete cancelled by user');
-            return;
-        }
-        
-        console.log('🔷 Dashboard: Delete confirmed, dispatching event');
-        
-        // Dispatch event to Velo to delete SEO data
-        this._dispatchEvent('delete-seo', {
-            product: product,
-            seoData: seoData
-        });
-    }
-    
-    _closeModal() {
-        console.log('🔷 Dashboard: Closing modal');
-        const modal = this._shadow.getElementById('seoModal');
-        modal.classList.remove('active');
-        this._selectedProduct = null;
-        this._editMode = false;
     }
     
     _showToast(type, message) {
-        console.log('🔷 Dashboard: Showing toast:', { type, message });
-        
         const toast = this._shadow.getElementById('toastNotification');
         const toastMessage = this._shadow.getElementById('toastMessage');
-        const toastIcon = toast.querySelector('.toast-icon');
         
-        // Set message
         toastMessage.textContent = message;
-        
-        // Set type and icon
         toast.className = `toast-notification toast-${type} show`;
         
-        if (type === 'success') {
-            toastIcon.innerHTML = '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>';
-        } else if (type === 'error') {
-            toastIcon.innerHTML = '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>';
-        }
-        
-        // Auto hide after 5 seconds
         setTimeout(() => {
             toast.classList.remove('show');
         }, 5000);
     }
 }
 
-// Register the custom element
-console.log('🔷 Dashboard: Registering custom element "product-seo-dashboard"');
 customElements.define('product-seo-dashboard', ProductSEODashboard);
 console.log('🔷 Dashboard: ✅ Custom element registered');
