@@ -276,45 +276,51 @@
                                 this.pendingElements.add(node);
                             }
                         });
+                    } else if (mutation.type === 'attributes') {
+                        // Also catch attribute changes that might affect styling
+                        if (mutation.target.nodeType === Node.ELEMENT_NODE) {
+                            this.pendingElements.add(mutation.target);
+                        }
                     }
                 });
                 
-                // Process pending elements after a short delay
+                // Process pending elements after a short delay - reduced from 100ms to 50ms
                 clearTimeout(this.pendingTimeout);
                 this.pendingTimeout = setTimeout(() => {
                     this.processPendingElements(isDark);
-                }, 100);
+                }, 50);
             });
 
             this.observer.observe(document.body, {
                 childList: true,
                 subtree: true,
                 attributes: true,
-                attributeFilter: ['style', 'class']
+                attributeFilter: ['style', 'class', 'data-hook']
             });
         }
 
         processPendingElements(isDark) {
             this.pendingElements.forEach(node => {
-                if (!this.processedElements.has(node)) {
-                    this.storeOriginalColorsForElement(node);
-                    this.processElement(node, isDark);
-                    
-                    if (node.shadowRoot) {
-                        this.processShadowRoot(node.shadowRoot, isDark);
-                    }
-                    
-                    // Process descendants
-                    const descendants = node.querySelectorAll('*');
-                    descendants.forEach(el => {
-                        if (!this.processedElements.has(el)) {
-                            this.storeOriginalColorsForElement(el);
-                            this.processElement(el, isDark);
-                        }
-                    });
-                    
-                    this.processedElements.add(node);
+                // Always process, don't skip based on processedElements
+                this.storeOriginalColorsForElement(node);
+                this.processElement(node, isDark);
+                
+                if (node.shadowRoot) {
+                    this.processShadowRoot(node.shadowRoot, isDark);
                 }
+                
+                // Process descendants aggressively
+                const descendants = node.querySelectorAll('*');
+                descendants.forEach(el => {
+                    this.storeOriginalColorsForElement(el);
+                    this.processElement(el, isDark);
+                    
+                    if (el.shadowRoot) {
+                        this.processShadowRoot(el.shadowRoot, isDark);
+                    }
+                });
+                
+                this.processedElements.add(node);
             });
             
             this.pendingElements.clear();
@@ -443,6 +449,7 @@
                     borderRightColor: computedStyle.borderRightColor,
                     borderBottomColor: computedStyle.borderBottomColor,
                     borderLeftColor: computedStyle.borderLeftColor,
+                    outlineColor: computedStyle.outlineColor,
                     fill: computedStyle.fill,
                     stroke: computedStyle.stroke,
                     backgroundImage: computedStyle.backgroundImage,
@@ -590,25 +597,17 @@
 
             // Convert colors in box-shadow and text-shadow
             // Format: offset-x offset-y blur-radius spread-radius color
-            let converted = shadowString.replace(/#[0-9a-f]{3,6}/gi, (match) => {
+            let converted = shadowString;
+            
+            // Replace hex colors
+            converted = converted.replace(/#[0-9a-f]{3,6}/gi, (match) => {
                 return this.convertColor(match, toDark) || match;
             });
 
+            // Replace rgb/rgba colors
             converted = converted.replace(/rgba?\([^)]+\)/gi, (match) => {
                 return this.convertColor(match, toDark) || match;
             });
-
-            // Handle multiple shadows separated by commas
-            if (converted.includes(',')) {
-                const shadows = converted.split(/,(?![^(]*\))/);
-                converted = shadows.map(shadow => {
-                    return shadow.replace(/#[0-9a-f]{3,6}/gi, (match) => {
-                        return this.convertColor(match, toDark) || match;
-                    }).replace(/rgba?\([^)]+\)/gi, (match) => {
-                        return this.convertColor(match, toDark) || match;
-                    });
-                }).join(',');
-            }
 
             return converted;
         }
@@ -673,23 +672,41 @@
                 '[data-hook*="price"]',
                 '[class*="breadcrumb"]',
                 '[class*="product-title"]',
-                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a'
+                '[data-hook]',
+                '[class*="wix"]',
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a', 'div', 'section', 'article'
             ];
             
             missedSelectors.forEach(selector => {
                 try {
                     const elements = document.querySelectorAll(selector);
                     elements.forEach(el => {
-                        if (!this.processedElements.has(el)) {
-                            this.storeOriginalColorsForElement(el);
-                            this.processElement(el, isDark);
-                            this.processedElements.add(el);
-                        }
+                        // Always reprocess to ensure consistency
+                        this.storeOriginalColorsForElement(el);
+                        this.processElement(el, isDark);
+                        this.processedElements.add(el);
                     });
                 } catch (e) {
                     // Invalid selector, skip
                 }
             });
+            
+            // Additional aggressive pass after a delay for late-loading elements
+            setTimeout(() => {
+                console.log('🔍 Secondary pass for late-loading elements...');
+                missedSelectors.forEach(selector => {
+                    try {
+                        const elements = document.querySelectorAll(selector);
+                        elements.forEach(el => {
+                            this.storeOriginalColorsForElement(el);
+                            this.processElement(el, isDark);
+                            this.processedElements.add(el);
+                        });
+                    } catch (e) {
+                        // Invalid selector, skip
+                    }
+                });
+            }, 800);
         }
 
         restoreOriginalColors() {
@@ -710,6 +727,7 @@
                         element.style.borderRightColor = '';
                         element.style.borderBottomColor = '';
                         element.style.borderLeftColor = '';
+                        element.style.outlineColor = '';
                         element.style.fill = '';
                         element.style.stroke = '';
                         element.style.backgroundImage = '';
@@ -746,6 +764,7 @@
                                 shadowEl.style.borderRightColor = '';
                                 shadowEl.style.borderBottomColor = '';
                                 shadowEl.style.borderLeftColor = '';
+                                shadowEl.style.outlineColor = '';
                                 shadowEl.style.fill = '';
                                 shadowEl.style.stroke = '';
                                 shadowEl.style.backgroundImage = '';
@@ -813,6 +832,9 @@
 
                 const newBorderLeft = this.convertColor(original.borderLeftColor, toDark);
                 if (newBorderLeft) element.style.borderLeftColor = newBorderLeft;
+
+                const newOutline = this.convertColor(original.outlineColor, toDark);
+                if (newOutline) element.style.outlineColor = newOutline;
 
                 if (original.fill && original.fill !== 'none') {
                     const newFill = this.convertColor(original.fill, toDark);
