@@ -276,51 +276,45 @@
                                 this.pendingElements.add(node);
                             }
                         });
-                    } else if (mutation.type === 'attributes') {
-                        // Also catch attribute changes that might affect styling
-                        if (mutation.target.nodeType === Node.ELEMENT_NODE) {
-                            this.pendingElements.add(mutation.target);
-                        }
                     }
                 });
                 
-                // Process pending elements after a short delay - reduced from 100ms to 50ms
+                // Process pending elements after a short delay
                 clearTimeout(this.pendingTimeout);
                 this.pendingTimeout = setTimeout(() => {
                     this.processPendingElements(isDark);
-                }, 50);
+                }, 100);
             });
 
             this.observer.observe(document.body, {
                 childList: true,
                 subtree: true,
                 attributes: true,
-                attributeFilter: ['style', 'class', 'data-hook']
+                attributeFilter: ['style', 'class']
             });
         }
 
         processPendingElements(isDark) {
             this.pendingElements.forEach(node => {
-                // Always process, don't skip based on processedElements
-                this.storeOriginalColorsForElement(node);
-                this.processElement(node, isDark);
-                
-                if (node.shadowRoot) {
-                    this.processShadowRoot(node.shadowRoot, isDark);
-                }
-                
-                // Process descendants aggressively
-                const descendants = node.querySelectorAll('*');
-                descendants.forEach(el => {
-                    this.storeOriginalColorsForElement(el);
-                    this.processElement(el, isDark);
+                if (!this.processedElements.has(node)) {
+                    this.storeOriginalColorsForElement(node);
+                    this.processElement(node, isDark);
                     
-                    if (el.shadowRoot) {
-                        this.processShadowRoot(el.shadowRoot, isDark);
+                    if (node.shadowRoot) {
+                        this.processShadowRoot(node.shadowRoot, isDark);
                     }
-                });
-                
-                this.processedElements.add(node);
+                    
+                    // Process descendants
+                    const descendants = node.querySelectorAll('*');
+                    descendants.forEach(el => {
+                        if (!this.processedElements.has(el)) {
+                            this.storeOriginalColorsForElement(el);
+                            this.processElement(el, isDark);
+                        }
+                    });
+                    
+                    this.processedElements.add(node);
+                }
             });
             
             this.pendingElements.clear();
@@ -449,13 +443,10 @@
                     borderRightColor: computedStyle.borderRightColor,
                     borderBottomColor: computedStyle.borderBottomColor,
                     borderLeftColor: computedStyle.borderLeftColor,
-                    outlineColor: computedStyle.outlineColor,
                     fill: computedStyle.fill,
                     stroke: computedStyle.stroke,
                     backgroundImage: computedStyle.backgroundImage,
                     webkitTextFillColor: computedStyle.webkitTextFillColor || computedStyle.getPropertyValue('-webkit-text-fill-color'),
-                    boxShadow: computedStyle.boxShadow,
-                    textShadow: computedStyle.textShadow,
                     // Store element's inline styles to preserve them
                     inlineBackgroundColor: element.style.backgroundColor,
                     inlineColor: element.style.color
@@ -590,28 +581,6 @@
             return converted;
         }
 
-        convertBoxShadow(shadowString, toDark) {
-            if (!shadowString || shadowString === 'none') {
-                return shadowString;
-            }
-
-            // Convert colors in box-shadow and text-shadow
-            // Format: offset-x offset-y blur-radius spread-radius color
-            let converted = shadowString;
-            
-            // Replace hex colors
-            converted = converted.replace(/#[0-9a-f]{3,6}/gi, (match) => {
-                return this.convertColor(match, toDark) || match;
-            });
-
-            // Replace rgb/rgba colors
-            converted = converted.replace(/rgba?\([^)]+\)/gi, (match) => {
-                return this.convertColor(match, toDark) || match;
-            });
-
-            return converted;
-        }
-
         changeTheme() {
             this.themeChangeInProgress = true;
             
@@ -672,41 +641,23 @@
                 '[data-hook*="price"]',
                 '[class*="breadcrumb"]',
                 '[class*="product-title"]',
-                '[data-hook]',
-                '[class*="wix"]',
-                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a', 'div', 'section', 'article'
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a'
             ];
             
             missedSelectors.forEach(selector => {
                 try {
                     const elements = document.querySelectorAll(selector);
                     elements.forEach(el => {
-                        // Always reprocess to ensure consistency
-                        this.storeOriginalColorsForElement(el);
-                        this.processElement(el, isDark);
-                        this.processedElements.add(el);
+                        if (!this.processedElements.has(el)) {
+                            this.storeOriginalColorsForElement(el);
+                            this.processElement(el, isDark);
+                            this.processedElements.add(el);
+                        }
                     });
                 } catch (e) {
                     // Invalid selector, skip
                 }
             });
-            
-            // Additional aggressive pass after a delay for late-loading elements
-            setTimeout(() => {
-                console.log('🔍 Secondary pass for late-loading elements...');
-                missedSelectors.forEach(selector => {
-                    try {
-                        const elements = document.querySelectorAll(selector);
-                        elements.forEach(el => {
-                            this.storeOriginalColorsForElement(el);
-                            this.processElement(el, isDark);
-                            this.processedElements.add(el);
-                        });
-                    } catch (e) {
-                        // Invalid selector, skip
-                    }
-                });
-            }, 800);
         }
 
         restoreOriginalColors() {
@@ -727,15 +678,12 @@
                         element.style.borderRightColor = '';
                         element.style.borderBottomColor = '';
                         element.style.borderLeftColor = '';
-                        element.style.outlineColor = '';
                         element.style.fill = '';
                         element.style.stroke = '';
                         element.style.backgroundImage = '';
                         element.style.webkitTextFillColor = '';
                         element.style.webkitBackgroundClip = '';
                         element.style.backgroundClip = '';
-                        element.style.boxShadow = '';
-                        element.style.textShadow = '';
                         restoredCount++;
                     } catch (e) {
                         // Element not accessible, skip
@@ -764,15 +712,12 @@
                                 shadowEl.style.borderRightColor = '';
                                 shadowEl.style.borderBottomColor = '';
                                 shadowEl.style.borderLeftColor = '';
-                                shadowEl.style.outlineColor = '';
                                 shadowEl.style.fill = '';
                                 shadowEl.style.stroke = '';
                                 shadowEl.style.backgroundImage = '';
                                 shadowEl.style.webkitTextFillColor = '';
                                 shadowEl.style.webkitBackgroundClip = '';
                                 shadowEl.style.backgroundClip = '';
-                                shadowEl.style.boxShadow = '';
-                                shadowEl.style.textShadow = '';
                             } catch (e) {
                                 // Element not accessible, skip
                             }
@@ -833,9 +778,6 @@
                 const newBorderLeft = this.convertColor(original.borderLeftColor, toDark);
                 if (newBorderLeft) element.style.borderLeftColor = newBorderLeft;
 
-                const newOutline = this.convertColor(original.outlineColor, toDark);
-                if (newOutline) element.style.outlineColor = newOutline;
-
                 if (original.fill && original.fill !== 'none') {
                     const newFill = this.convertColor(original.fill, toDark);
                     if (newFill) element.style.fill = newFill;
@@ -859,24 +801,6 @@
                         element.style.backgroundImage = newGradient;
                         element.style.webkitBackgroundClip = 'text';
                         element.style.backgroundClip = 'text';
-                    }
-                }
-
-                // Convert box-shadow colors
-                if (original.boxShadow && original.boxShadow !== 'none') {
-                    const newBoxShadow = this.convertBoxShadow(original.boxShadow, toDark);
-                    if (newBoxShadow) {
-                        element.style.boxShadow = newBoxShadow;
-                        element.style.transition = 'box-shadow 0.3s ease';
-                    }
-                }
-
-                // Convert text-shadow colors
-                if (original.textShadow && original.textShadow !== 'none') {
-                    const newTextShadow = this.convertBoxShadow(original.textShadow, toDark);
-                    if (newTextShadow) {
-                        element.style.textShadow = newTextShadow;
-                        element.style.transition = 'text-shadow 0.3s ease';
                     }
                 }
 
