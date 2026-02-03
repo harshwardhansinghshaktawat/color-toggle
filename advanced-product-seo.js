@@ -433,6 +433,60 @@ class ProductSEODashboard extends HTMLElement {
                     gap: 8px;
                 }
                 
+                .toast-notification {
+                    position: fixed;
+                    top: 20px;
+                    right: 20px;
+                    padding: 16px 20px;
+                    border-radius: 8px;
+                    box-shadow: var(--shadow-lg);
+                    display: none;
+                    align-items: center;
+                    gap: 12px;
+                    z-index: 2000;
+                    animation: slideIn 0.3s ease;
+                    min-width: 300px;
+                }
+                
+                .toast-notification.show {
+                    display: flex;
+                }
+                
+                .toast-success {
+                    background: #f0fdf4;
+                    border-left: 4px solid var(--success-color);
+                    color: #166534;
+                }
+                
+                .toast-error {
+                    background: #fef2f2;
+                    border-left: 4px solid var(--error-color);
+                    color: #991b1b;
+                }
+                
+                .toast-icon {
+                    width: 24px;
+                    height: 24px;
+                    flex-shrink: 0;
+                }
+                
+                .toast-message {
+                    flex: 1;
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+                
+                @keyframes slideIn {
+                    from {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+                
                 /* Responsive */
                 @media (max-width: 768px) {
                     .dashboard-header {
@@ -465,6 +519,12 @@ class ProductSEODashboard extends HTMLElement {
                     .stat-item {
                         flex: 1;
                         min-width: 120px;
+                    }
+                    
+                    .toast-notification {
+                        right: 10px;
+                        left: 10px;
+                        min-width: auto;
                     }
                 }
                 
@@ -574,13 +634,50 @@ class ProductSEODashboard extends HTMLElement {
                     </div>
                 </div>
             </div>
+            
+            <div class="toast-notification" id="toastNotification">
+                <svg class="toast-icon" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+                </svg>
+                <div class="toast-message" id="toastMessage"></div>
+            </div>
         `;
         
         this._shadow.appendChild(this._root);
         this._setupEventListeners();
     }
     
+    static get observedAttributes() {
+        return ['product-data', 'notification'];
+    }
+    
+    attributeChangedCallback(name, oldValue, newValue) {
+        if (name === 'product-data' && newValue && newValue !== oldValue) {
+            try {
+                const data = JSON.parse(newValue);
+                this.setProducts(data);
+            } catch (e) {
+                console.error('Error parsing product data:', e);
+            }
+        }
+        
+        if (name === 'notification' && newValue && newValue !== oldValue) {
+            try {
+                const notification = JSON.parse(newValue);
+                if (notification.type === 'success') {
+                    this._showToast('success', notification.message);
+                    this._closeModal();
+                } else if (notification.type === 'error') {
+                    this._showToast('error', notification.message);
+                }
+            } catch (e) {
+                console.error('Error parsing notification:', e);
+            }
+        }
+    }
+    
     connectedCallback() {
+        // Trigger initial load when element is connected to DOM
         this._loadProducts();
     }
     
@@ -610,7 +707,16 @@ class ProductSEODashboard extends HTMLElement {
         });
     }
     
-    async _loadProducts() {
+    _dispatchEvent(eventName, detail) {
+        const event = new CustomEvent(eventName, {
+            detail: detail,
+            bubbles: true,
+            composed: true
+        });
+        this.dispatchEvent(event);
+    }
+    
+    _loadProducts() {
         const loadingContainer = this._shadow.getElementById('loadingContainer');
         const productsContainer = this._shadow.getElementById('productsContainer');
         const emptyState = this._shadow.getElementById('emptyState');
@@ -620,16 +726,11 @@ class ProductSEODashboard extends HTMLElement {
         emptyState.style.display = 'none';
         
         try {
-            // Dispatch event to get products from backend
-            const event = new CustomEvent('load-products', {
-                detail: {
-                    limit: this._pageSize,
-                    skip: this._currentPage * this._pageSize
-                },
-                bubbles: true,
-                composed: true
+            // Dispatch event to request products from Velo
+            this._dispatchEvent('load-products', {
+                limit: this._pageSize,
+                skip: this._currentPage * this._pageSize
             });
-            this.dispatchEvent(event);
             
         } catch (error) {
             console.error('Error loading products:', error);
@@ -675,8 +776,13 @@ class ProductSEODashboard extends HTMLElement {
             
             const hasSEO = !!seoItem;
             
+            // Escape JSON for HTML attributes
+            const escapeJson = (obj) => {
+                return JSON.stringify(obj).replace(/"/g, '&quot;');
+            };
+            
             card.innerHTML = `
-                <img src="${product.imageUrl}" alt="${product.name}" class="product-image">
+                <img src="${product.imageUrl}" alt="${product.name}" class="product-image" onerror="this.src='https://via.placeholder.com/400'">
                 <div class="product-info">
                     <div class="seo-status-badge ${hasSEO ? 'seo-status-active' : 'seo-status-none'}">
                         <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor">
@@ -695,17 +801,17 @@ class ProductSEODashboard extends HTMLElement {
                     <div class="product-actions">
                         ${hasSEO ? `
                             <div class="action-buttons">
-                                <button class="btn btn-warning" data-action="edit" data-product='${JSON.stringify(product)}' data-seo='${JSON.stringify(seoItem)}'>
+                                <button class="btn btn-warning" data-action="edit">
                                     <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                                     Edit SEO
                                 </button>
-                                <button class="btn btn-danger" data-action="delete" data-product='${JSON.stringify(product)}' data-seo='${JSON.stringify(seoItem)}'>
+                                <button class="btn btn-danger" data-action="delete">
                                     <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                                     Delete
                                 </button>
                             </div>
                         ` : `
-                            <button class="btn btn-primary" data-action="set" data-product='${JSON.stringify(product)}'>
+                            <button class="btn btn-primary" data-action="set">
                                 <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
                                 Set Product SEO
                             </button>
@@ -714,15 +820,16 @@ class ProductSEODashboard extends HTMLElement {
                 </div>
             `;
             
+            // Store product and SEO data on the card element
+            card._productData = product;
+            card._seoData = seoItem;
+            
             // Add event listeners to buttons
             const buttons = card.querySelectorAll('button');
             buttons.forEach(button => {
                 button.addEventListener('click', () => {
                     const action = button.dataset.action;
-                    const product = JSON.parse(button.dataset.product);
-                    const seoData = button.dataset.seo ? JSON.parse(button.dataset.seo) : null;
-                    
-                    this._handleAction(action, product, seoData);
+                    this._handleAction(action, card._productData, card._seoData);
                 });
             });
             
@@ -816,35 +923,25 @@ class ProductSEODashboard extends HTMLElement {
         modal.classList.add('active');
     }
     
-    async _saveSEO(product, seoData, existingSEO) {
-        // Dispatch event to save SEO data
-        const event = new CustomEvent('save-seo', {
-            detail: {
-                product: product,
-                seoData: seoData,
-                existingSEO: existingSEO
-            },
-            bubbles: true,
-            composed: true
+    _saveSEO(product, seoData, existingSEO) {
+        // Dispatch event to Velo to save SEO data
+        this._dispatchEvent('save-seo', {
+            product: product,
+            seoData: seoData,
+            existingSEO: existingSEO
         });
-        this.dispatchEvent(event);
     }
     
-    async _deleteSEO(product, seoData) {
+    _deleteSEO(product, seoData) {
         if (!confirm(`Are you sure you want to delete SEO data for "${product.name}"?`)) {
             return;
         }
         
-        // Dispatch event to delete SEO data
-        const event = new CustomEvent('delete-seo', {
-            detail: {
-                product: product,
-                seoData: seoData
-            },
-            bubbles: true,
-            composed: true
+        // Dispatch event to Velo to delete SEO data
+        this._dispatchEvent('delete-seo', {
+            product: product,
+            seoData: seoData
         });
-        this.dispatchEvent(event);
     }
     
     _closeModal() {
@@ -854,16 +951,27 @@ class ProductSEODashboard extends HTMLElement {
         this._editMode = false;
     }
     
-    showSuccess(message) {
-        this._closeModal();
-        this._loadProducts(); // Reload products to update UI
+    _showToast(type, message) {
+        const toast = this._shadow.getElementById('toastNotification');
+        const toastMessage = this._shadow.getElementById('toastMessage');
+        const toastIcon = toast.querySelector('.toast-icon');
         
-        // You could add a toast notification here
-        alert(message);
-    }
-    
-    showError(message) {
-        alert('Error: ' + message);
+        // Set message
+        toastMessage.textContent = message;
+        
+        // Set type and icon
+        toast.className = `toast-notification toast-${type} show`;
+        
+        if (type === 'success') {
+            toastIcon.innerHTML = '<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>';
+        } else if (type === 'error') {
+            toastIcon.innerHTML = '<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>';
+        }
+        
+        // Auto hide after 5 seconds
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 5000);
     }
 }
 
