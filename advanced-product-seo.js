@@ -11,8 +11,6 @@ class ProductSEODashboard extends HTMLElement {
         this._selectedProduct = null;
         this._editMode = false;
         this._showingForm = false;
-        this._currentStep = 1;
-        this._totalSteps = 6;
         this._formData = {};
         this._reviews = [];
         this._faqs = [];
@@ -324,13 +322,13 @@ class ProductSEODashboard extends HTMLElement {
                     border: 1px solid var(--border);
                 }
                 
-                /* Multi-Step Form */
+                /* Single Form */
                 .seo-form-container {
                     background: var(--bg-primary);
                     border-radius: 20px;
                     box-shadow: var(--shadow-xl);
                     overflow: hidden;
-                    max-width: 1000px;
+                    max-width: 1200px;
                     margin: 0 auto;
                 }
                 
@@ -367,80 +365,10 @@ class ProductSEODashboard extends HTMLElement {
                     background: rgba(255, 255, 255, 0.3);
                 }
                 
-                .progress-bar {
-                    height: 6px;
-                    background: rgba(255, 255, 255, 0.3);
-                    position: relative;
-                }
-                
-                .progress-fill {
-                    height: 100%;
-                    background: white;
-                    transition: width 0.3s ease;
-                }
-                
-                .step-indicator {
-                    padding: 24px 32px;
-                    background: var(--bg-secondary);
-                    border-bottom: 2px solid var(--border);
-                }
-                
-                .step-dots {
-                    display: flex;
-                    justify-content: center;
-                    gap: 12px;
-                    margin-bottom: 16px;
-                }
-                
-                .step-dot {
-                    width: 12px;
-                    height: 12px;
-                    border-radius: 50%;
-                    background: var(--border);
-                    transition: all 0.3s;
-                }
-                
-                .step-dot.active {
-                    background: var(--primary);
-                    transform: scale(1.3);
-                }
-                
-                .step-dot.completed {
-                    background: var(--success);
-                }
-                
-                .step-title {
-                    text-align: center;
-                    font-size: 20px;
-                    font-weight: 700;
-                    color: var(--text-primary);
-                    margin-bottom: 8px;
-                }
-                
-                .step-description {
-                    text-align: center;
-                    font-size: 14px;
-                    color: var(--text-secondary);
-                }
-                
                 .form-body {
                     padding: 32px;
-                    max-height: 60vh;
+                    max-height: 70vh;
                     overflow-y: auto;
-                }
-                
-                .form-step {
-                    display: none;
-                }
-                
-                .form-step.active {
-                    display: block;
-                    animation: fadeIn 0.3s ease;
-                }
-                
-                @keyframes fadeIn {
-                    from { opacity: 0; transform: translateY(10px); }
-                    to { opacity: 1; transform: translateY(0); }
                 }
                 
                 .info-box {
@@ -490,16 +418,49 @@ class ProductSEODashboard extends HTMLElement {
                     margin-bottom: 32px;
                 }
                 
+                .section-header {
+                    display: flex;
+                    align-items: center;
+                    justify-content: space-between;
+                    cursor: pointer;
+                    padding: 16px;
+                    background: var(--bg-secondary);
+                    border-radius: 12px;
+                    margin-bottom: 16px;
+                    transition: all 0.2s;
+                }
+                
+                .section-header:hover {
+                    background: var(--bg-tertiary);
+                }
+                
                 .section-title {
                     font-size: 18px;
                     font-weight: 700;
                     color: var(--text-primary);
-                    margin-bottom: 16px;
-                    padding-bottom: 12px;
-                    border-bottom: 2px solid var(--border);
                     display: flex;
                     align-items: center;
                     gap: 8px;
+                }
+                
+                .section-toggle {
+                    font-size: 24px;
+                    color: var(--text-secondary);
+                    transition: transform 0.3s;
+                }
+                
+                .section-header.collapsed .section-toggle {
+                    transform: rotate(-90deg);
+                }
+                
+                .section-content {
+                    max-height: 2000px;
+                    overflow: hidden;
+                    transition: max-height 0.3s ease;
+                }
+                
+                .section-content.collapsed {
+                    max-height: 0;
                 }
                 
                 .form-group {
@@ -644,13 +605,7 @@ class ProductSEODashboard extends HTMLElement {
                     border-top: 2px solid var(--border);
                     display: flex;
                     gap: 16px;
-                    justify-content: space-between;
-                }
-                
-                .footer-left,
-                .footer-right {
-                    display: flex;
-                    gap: 12px;
+                    justify-content: flex-end;
                 }
                 
                 .loading-container,
@@ -784,7 +739,7 @@ class ProductSEODashboard extends HTMLElement {
                             </div>
                         </div>
                         
-                        <!-- Multi-Step Form -->
+                        <!-- Single Form -->
                         <div id="formView" class="view-container">
                             <div class="seo-form-container">
                                 <div class="form-header">
@@ -792,36 +747,13 @@ class ProductSEODashboard extends HTMLElement {
                                     <button class="form-close" id="closeForm">×</button>
                                 </div>
                                 
-                                <div class="progress-bar">
-                                    <div class="progress-fill" id="progressFill" style="width: 16.67%"></div>
-                                </div>
-                                
-                                <div class="step-indicator">
-                                    <div class="step-dots" id="stepDots">
-                                        <div class="step-dot active"></div>
-                                        <div class="step-dot"></div>
-                                        <div class="step-dot"></div>
-                                        <div class="step-dot"></div>
-                                        <div class="step-dot"></div>
-                                        <div class="step-dot"></div>
-                                    </div>
-                                    <h3 class="step-title" id="stepTitle">Basic SEO Information</h3>
-                                    <p class="step-description" id="stepDescription">Page title, description, and core identifiers</p>
-                                </div>
-                                
                                 <div class="form-body" id="formBody">
-                                    <!-- Steps will be dynamically inserted here -->
+                                    <!-- Form content will be inserted here -->
                                 </div>
                                 
                                 <div class="form-footer">
-                                    <div class="footer-left">
-                                        <button class="btn btn-secondary" id="prevStep" style="display: none;">← Previous</button>
-                                    </div>
-                                    <div class="footer-right">
-                                        <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                                        <button class="btn btn-primary" id="nextStep">Next →</button>
-                                        <button class="btn btn-success" id="saveBtn" style="display: none;">Save SEO Data</button>
-                                    </div>
+                                    <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                                    <button class="btn btn-success" id="saveBtn">Save SEO Data</button>
                                 </div>
                             </div>
                         </div>
@@ -840,7 +772,7 @@ class ProductSEODashboard extends HTMLElement {
             </div>
         `;
         
-       this._shadow.appendChild(this._root);
+        this._shadow.appendChild(this._root);
     }
     
     _setupEventListeners() {
@@ -859,21 +791,13 @@ class ProductSEODashboard extends HTMLElement {
             this._loadProducts();
         });
         
-        // Form navigation
+        // Form controls
         this._shadow.getElementById('closeForm').addEventListener('click', () => {
             this._hideForm();
         });
         
         this._shadow.getElementById('cancelBtn').addEventListener('click', () => {
             this._hideForm();
-        });
-        
-        this._shadow.getElementById('prevStep').addEventListener('click', () => {
-            this._previousStep();
-        });
-        
-        this._shadow.getElementById('nextStep').addEventListener('click', () => {
-            this._nextStep();
         });
         
         this._shadow.getElementById('saveBtn').addEventListener('click', () => {
@@ -970,9 +894,6 @@ class ProductSEODashboard extends HTMLElement {
                 </div>
             `;
             
-            card._productData = product;
-            card._seoData = seoItem;
-            
             const setBtn = card.querySelector('.set-btn');
             const editBtn = card.querySelector('.edit-btn');
             const deleteBtn = card.querySelector('.delete-btn');
@@ -994,1231 +915,803 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _showForm(product, seoData, isEdit) {
-    console.log('🔷 Dashboard: Showing form for:', product.name);
-    console.log('🔷 Dashboard: isEdit:', isEdit);
-    
-    this._selectedProduct = product;
-    this._editMode = isEdit;
-    this._showingForm = true;
-    this._currentStep = 1;
-    this._reviews = [];
-    this._faqs = [];
-    
-    const formTitle = this._shadow.getElementById('formTitle');
-    formTitle.textContent = isEdit ? 'Edit Product SEO' : 'Setup Product SEO';
-    
-    console.log('🔷 Dashboard: Initializing form data...');
-    
-    // Initialize form data
-    this._formData = {
-        // Step 1: Basic SEO
-        productName: product.name,
-        description: '',
-        metaKeywords: '',
-        canonicalUrl: '',
+        console.log('🔷 Dashboard: Showing form for:', product.name);
         
-        // Step 2: Product Schema
-        sku: '',
-        mpn: '',
-        gtin: '',
-        isbn: '',
-        brandName: '',
-        imageUrls: [],
+        this._selectedProduct = product;
+        this._editMode = isEdit;
+        this._showingForm = true;
+        this._reviews = [];
+        this._faqs = [];
         
-        // Step 3: Pricing & Offers
-        price: '',
-        priceCurrency: 'USD',
-        priceValidUntil: '',
-        availability: '',
-        itemCondition: '',
-        offerUrl: '',
+        const formTitle = this._shadow.getElementById('formTitle');
+        formTitle.textContent = isEdit ? 'Edit Product SEO' : 'Setup Product SEO';
         
-        // Step 4: Merchant Listing
-        shippingCost: '',
-        shippingCurrency: 'USD',
-        shippingDestination: '',
-        handlingTimeMin: '',
-        handlingTimeMax: '',
-        deliveryTimeMin: '',
-        deliveryTimeMax: '',
-        returnDays: '',
-        returnCountry: '',
-        returnMethod: '',
-        returnFees: '',
-        
-        // Step 5: Reviews & Ratings
-        aggregateRatingValue: '',
-        reviewCount: '',
-        bestRating: '5',
-        worstRating: '1',
-        
-        // Step 6: Advanced
-        ogTitle: '',
-        ogDescription: '',
-        ogImage: '',
-        twitterCard: 'summary_large_image',
-        robotsContent: 'index, follow'
-    };
-    
-    console.log('🔷 Dashboard: Checking for existing SEO data...');
-    
-    // Populate from existing data
-    if (seoData && seoData.seoData) {
-        try {
-            console.log('🔷 Dashboard: Parsing existing SEO data...');
-            const data = typeof seoData.seoData === 'string' 
-                ? JSON.parse(seoData.seoData) 
-                : seoData.seoData;
-            
-            console.log('🔷 Dashboard: Existing data:', data);
-            Object.assign(this._formData, data);
-            
-            if (data.reviews) {
-                this._reviews = data.reviews;
-                console.log('🔷 Dashboard: Loaded', this._reviews.length, 'reviews');
-            }
-            if (data.faqs) {
-                this._faqs = data.faqs;
-                console.log('🔷 Dashboard: Loaded', this._faqs.length, 'FAQs');
-            }
-        } catch (e) {
-            console.error('🔷 Dashboard: Error parsing SEO data:', e);
-        }
-    }
-    
-    console.log('🔷 Dashboard: Rendering form steps...');
-    
-    // Render all form steps
-    try {
-        this._renderFormSteps();
-        console.log('🔷 Dashboard: Form steps rendered successfully');
-    } catch (e) {
-        console.error('🔷 Dashboard: Error rendering form steps:', e);
-        console.error('🔷 Dashboard: Error stack:', e.stack);
-        return;
-    }
-    
-    console.log('🔷 Dashboard: Switching to form view...');
-    
-    // Show form view
-    const productsView = this._shadow.getElementById('productsView');
-    const formView = this._shadow.getElementById('formView');
-    
-    if (!productsView || !formView) {
-        console.error('🔷 Dashboard: Cannot find view elements!');
-        return;
-    }
-    
-    productsView.classList.remove('active');
-    formView.classList.add('active');
-    
-    console.log('🔷 Dashboard: Form view is now active');
-    
-    // Show first step
-    try {
-        this._updateStepDisplay();
-        console.log('🔷 Dashboard: Step display updated');
-    } catch (e) {
-        console.error('🔷 Dashboard: Error updating step display:', e);
-    }
-    
-    console.log('🔷 Dashboard: ✅ Form shown successfully');
-}
-    
-   _renderFormSteps() {
-    console.log('🔷 Dashboard: _renderFormSteps called');
-    
-    const formBody = this._shadow.getElementById('formBody');
-    
-    if (!formBody) {
-        console.error('🔷 Dashboard: ❌ formBody element not found!');
-        return;
-    }
-    
-    console.log('🔷 Dashboard: Clearing form body...');
-    formBody.innerHTML = '';
-    
-    try {
-        console.log('🔷 Dashboard: Creating step 1...');
-        const step1 = this._createStep1();
-        formBody.appendChild(step1);
-        console.log('🔷 Dashboard: ✅ Step 1 added');
-        
-        console.log('🔷 Dashboard: Creating step 2...');
-        const step2 = this._createStep2();
-        formBody.appendChild(step2);
-        console.log('🔷 Dashboard: ✅ Step 2 added');
-        
-        console.log('🔷 Dashboard: Creating step 3...');
-        const step3 = this._createStep3();
-        formBody.appendChild(step3);
-        console.log('🔷 Dashboard: ✅ Step 3 added');
-        
-        console.log('🔷 Dashboard: Creating step 4...');
-        const step4 = this._createStep4();
-        formBody.appendChild(step4);
-        console.log('🔷 Dashboard: ✅ Step 4 added');
-        
-        console.log('🔷 Dashboard: Creating step 5...');
-        const step5 = this._createStep5();
-        formBody.appendChild(step5);
-        console.log('🔷 Dashboard: ✅ Step 5 added');
-        
-        console.log('🔷 Dashboard: Creating step 6...');
-        const step6 = this._createStep6();
-        formBody.appendChild(step6);
-        console.log('🔷 Dashboard: ✅ Step 6 added');
-        
-        console.log('🔷 Dashboard: All steps created successfully');
-    } catch (e) {
-        console.error('🔷 Dashboard: ❌ Error creating steps:', e);
-        console.error('🔷 Dashboard: Error message:', e.message);
-        console.error('🔷 Dashboard: Error stack:', e.stack);
-        throw e;
-    }
-}
-    
-    _createStep1() {
-        const step = document.createElement('div');
-        step.className = 'form-step active';
-        step.id = 'step1';
-        
-        step.innerHTML = `
-            <div class="info-box">
-                <div class="info-box-title">📋 About Basic SEO</div>
-                <div class="info-box-text">
-                    This section controls how your product appears in search results. The title and description are crucial 
-                    for both search engines and users. Keep descriptions under 160 characters for best results.
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">📝 Meta Information</div>
-                
-                <div class="form-group">
-                    <label class="form-label required">Product Name (Title Tag)</label>
-                    <input type="text" class="form-input" id="productName" maxlength="60">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The main title shown in search results and browser tabs.<br>
-                        <strong>Best practice:</strong> Keep under 60 characters. Include main keyword at the beginning.<br>
-                        <strong>Example:</strong> "Wireless Noise-Canceling Headphones - Premium Audio"
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label required">Meta Description</label>
-                    <textarea class="form-textarea" id="description" maxlength="160" rows="3"></textarea>
-                    <div class="help-text">
-                        <strong>What it is:</strong> The summary text shown below your title in search results.<br>
-                        <strong>Best practice:</strong> 150-160 characters. Include a call-to-action and main benefits.<br>
-                        <strong>Example:</strong> "Experience superior sound quality with 30-hour battery life. Active noise cancellation blocks out distractions. Free shipping on orders over $50."
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Meta Keywords <span class="form-label-badge">Optional</span></label>
-                    <input type="text" class="form-input" id="metaKeywords" placeholder="wireless headphones, noise canceling, bluetooth">
-                    <div class="help-text">
-                        <strong>What it is:</strong> Comma-separated keywords related to your product.<br>
-                        <strong>Note:</strong> Google doesn't use this for ranking, but some other search engines might.<br>
-                        <strong>Can leave empty:</strong> Yes, this is completely optional.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Canonical URL <span class="form-label-badge">Optional</span></label>
-                    <input type="url" class="form-input" id="canonicalUrl" placeholder="https://yourstore.com/products/headphones">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The preferred URL for this product (prevents duplicate content issues).<br>
-                        <strong>When to use:</strong> If this product appears on multiple URLs, specify the main one here.<br>
-                        <strong>Can leave empty:</strong> Yes, Wix will auto-generate this if left blank.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">🤖 Robots Meta Tag</div>
-                
-                <div class="form-group">
-                    <label class="form-label">Robots Directive</label>
-                    <select class="form-select" id="robotsContent">
-                        <option value="index, follow">Index & Follow (Recommended) - Allow search engines to index and follow links</option>
-                        <option value="index, nofollow">Index but Don't Follow - Index page but don't follow links</option>
-                        <option value="noindex, follow">Don't Index but Follow - Don't show in search but follow links</option>
-                        <option value="noindex, nofollow">Don't Index or Follow - Completely hide from search engines</option>
-                        <option value="index, follow, max-snippet:160">Index with Snippet Limit - Limit description length to 160 chars</option>
-                        <option value="index, follow, noarchive">Index but No Cache - Don't show cached version in search</option>
-                    </select>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Instructions to search engine crawlers about how to treat this page.<br>
-                        <strong>Best practice:</strong> Use "Index & Follow" for products you want to rank in search.<br>
-                        <strong>Default:</strong> "Index & Follow" is recommended for all products.
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        // Set values
-        this._shadow.getElementById('productName').value = this._formData.productName || '';
-        this._shadow.getElementById('description').value = this._formData.description || '';
-        this._shadow.getElementById('metaKeywords').value = this._formData.metaKeywords || '';
-        this._shadow.getElementById('canonicalUrl').value = this._formData.canonicalUrl || '';
-        this._shadow.getElementById('robotsContent').value = this._formData.robotsContent || 'index, follow';
-        
-        return step;
-    }
-    
-    _createStep2() {
-        const step = document.createElement('div');
-        step.className = 'form-step';
-        step.id = 'step2';
-        
-        step.innerHTML = `
-            <div class="info-box">
-                <div class="info-box-title">🏷️ About Product Schema</div>
-                <div class="info-box-text">
-                    Product identifiers help Google understand exactly what product you're selling. While most fields are optional,
-                    providing more data (especially GTIN, SKU, or MPN) significantly improves your chances of appearing in rich results
-                    and Google Shopping.
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">🔢 Product Identifiers</div>
-                
-                <div class="form-row-3">
-                    <div class="form-group">
-                        <label class="form-label">SKU <span class="form-label-badge">Recommended</span></label>
-                        <input type="text" class="form-input" id="sku" placeholder="PROD-12345">
-                        <div class="help-text">
-                            <strong>What it is:</strong> Your internal product code (Stock Keeping Unit).<br>
-                            <strong>Example:</strong> "HDN-WL-BLK-001"
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">MPN <span class="form-label-badge">Recommended</span></label>
-                        <input type="text" class="form-input" id="mpn" placeholder="MFR123456">
-                        <div class="help-text">
-                            <strong>What it is:</strong> Manufacturer Part Number - the manufacturer's unique code.<br>
-                            <strong>Example:</strong> "WH-1000XM4"
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">GTIN <span class="form-label-badge">Highly Recommended</span></label>
-                        <input type="text" class="form-input" id="gtin" placeholder="00012345678905">
-                        <div class="help-text">
-                            <strong>What it is:</strong> Global Trade Item Number (UPC, EAN, or ISBN).<br>
-                            <strong>Example:</strong> "00012345678905" (14 digits)
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">ISBN <span class="form-label-badge">For Books Only</span></label>
-                    <input type="text" class="form-input" id="isbn" placeholder="978-3-16-148410-0">
-                    <div class="help-text">
-                        <strong>What it is:</strong> International Standard Book Number - use only if selling books.<br>
-                        <strong>Format:</strong> Can be 10 or 13 digits (with or without hyphens).<br>
-                        <strong>Can leave empty:</strong> Yes, unless you're selling books.
-                    </div>
-                </div>
-                
-                <div class="warning-box">
-                    <div class="warning-box-title">⚠️ Important: Product Identifiers</div>
-                    <div class="warning-box-text">
-                        At least ONE of these identifiers (GTIN, MPN, or Brand) is required for Google Shopping and Merchant Listings.
-                        Having all three greatly increases your product's visibility. GTIN is the most important.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">🏢 Brand Information</div>
-                
-                <div class="form-group">
-                    <label class="form-label">Brand Name <span class="form-label-badge">Highly Recommended</span></label>
-                    <input type="text" class="form-input" id="brandName" placeholder="Sony">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The manufacturer or brand name of the product.<br>
-                        <strong>Best practice:</strong> Use the official brand name exactly as written.<br>
-                        <strong>Examples:</strong> "Sony", "Nike", "Apple", "Samsung"<br>
-                        <strong>Required for:</strong> Google Shopping eligibility.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">🖼️ Product Images</div>
-                
-                <div class="form-group">
-                    <label class="form-label">Image URLs <span class="form-label-badge">Highly Recommended</span></label>
-                    <textarea class="form-textarea" id="imageUrls" rows="5" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg&#10;https://example.com/image3.jpg"></textarea>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Full URLs to high-quality product images (one per line).<br>
-                        <strong>Requirements:</strong>
-                        • Minimum 800x800 pixels (1200x1200 recommended)<br>
-                        • Format: JPG, PNG, or WebP<br>
-                        • White or transparent background preferred<br>
-                        • Show the actual product, not illustrations<br>
-                        <strong>Best practice:</strong> Add 3-5 images from different angles.
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        this._shadow.getElementById('sku').value = this._formData.sku || '';
-        this._shadow.getElementById('mpn').value = this._formData.mpn || '';
-        this._shadow.getElementById('gtin').value = this._formData.gtin || '';
-        this._shadow.getElementById('isbn').value = this._formData.isbn || '';
-        this._shadow.getElementById('brandName').value = this._formData.brandName || '';
-        
-        if (this._formData.imageUrls && Array.isArray(this._formData.imageUrls)) {
-            this._shadow.getElementById('imageUrls').value = this._formData.imageUrls.join('\n');
-        }
-        
-        return step;
-    }
-    
-    _createStep3() {
-        const step = document.createElement('div');
-        step.className = 'form-step';
-        step.id = 'step3';
-        
-        const currencies = this._getAllCurrencies();
-        
-        step.innerHTML = `
-            <div class="info-box">
-                <div class="info-box-title">💰 About Pricing & Offers</div>
-                <div class="info-box-text">
-                    Pricing information is REQUIRED for rich results. Google needs accurate, current prices to show your products
-                    in search results. Make sure to update the "Price Valid Until" date periodically.
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">💵 Price Information</div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label required">Price</label>
-                        <input type="number" step="0.01" min="0" class="form-input" id="price" placeholder="99.99">
-                        <div class="help-text">
-                            <strong>What it is:</strong> The current selling price (numbers only, no currency symbols).<br>
-                            <strong>Example:</strong> "99.99" or "1499.00"<br>
-                            <strong>Required:</strong> Yes, this is mandatory for rich results.
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label required">Currency</label>
-                        <select class="form-select" id="priceCurrency">
-                            ${currencies}
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> The currency code for the price (ISO 4217 format).<br>
-                            <strong>Required:</strong> Yes, must match the currency you're selling in.
-                        </div>
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Price Valid Until <span class="form-label-badge">Recommended</span></label>
-                    <input type="date" class="form-input" id="priceValidUntil">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The date when this price expires (format: YYYY-MM-DD).<br>
-                        <strong>Best practice:</strong> Set this at least 30 days in the future and update regularly.<br>
-                        <strong>Example:</strong> If today is Jan 1, 2025, set to Feb 1, 2025 or later.<br>
-                        <strong>Can leave empty:</strong> Yes, but highly recommended to include.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Product Page URL <span class="form-label-badge">Optional</span></label>
-                    <input type="url" class="form-input" id="offerUrl" placeholder="https://yourstore.com/products/product-name">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The specific URL where customers can buy this product.<br>
-                        <strong>Can leave empty:</strong> Yes, the current page URL will be used automatically.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">📦 Availability & Condition</div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label required">Availability Status</label>
-                        <select class="form-select" id="availability">
-                            <option value="">-- Select Availability --</option>
-                            <option value="https://schema.org/InStock">In Stock - Available for immediate purchase</option>
-                            <option value="https://schema.org/OutOfStock">Out of Stock - Currently unavailable</option>
-                            <option value="https://schema.org/PreOrder">Pre-Order - Available for pre-order only</option>
-                            <option value="https://schema.org/Discontinued">Discontinued - No longer available</option>
-                            <option value="https://schema.org/InStoreOnly">In Store Only - Not available online</option>
-                            <option value="https://schema.org/LimitedAvailability">Limited Availability - Low stock</option>
-                            <option value="https://schema.org/OnlineOnly">Online Only - Not in physical stores</option>
-                            <option value="https://schema.org/SoldOut">Sold Out - Permanently unavailable</option>
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Current stock status of the product.<br>
-                            <strong>Required:</strong> Yes, Google needs this to show accurate availability.<br>
-                            <strong>Best practice:</strong> Update this whenever stock changes.
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Item Condition <span class="form-label-badge">Recommended</span></label>
-                        <select class="form-select" id="itemCondition">
-                            <option value="">-- Select Condition --</option>
-                            <option value="https://schema.org/NewCondition">New - Brand new, unused product</option>
-                            <option value="https://schema.org/RefurbishedCondition">Refurbished - Professionally restored to working condition</option>
-                            <option value="https://schema.org/UsedCondition">Used - Previously owned/used product</option>
-                            <option value="https://schema.org/DamagedCondition">Damaged - Has visible damage or defects</option>
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> The physical condition of the product being sold.<br>
-                            <strong>Best practice:</strong> Most products should use "New".<br>
-                            <strong>Can leave empty:</strong> Yes, but recommended to specify.
-                        </div>
-                    </div>
-                </div>
-            </div>
-        `;
-        
-        this._shadow.getElementById('price').value = this._formData.price || '';
-        this._shadow.getElementById('priceCurrency').value = this._formData.priceCurrency || 'USD';
-        this._shadow.getElementById('priceValidUntil').value = this._formData.priceValidUntil || '';
-        this._shadow.getElementById('offerUrl').value = this._formData.offerUrl || '';
-        this._shadow.getElementById('availability').value = this._formData.availability || '';
-        this._shadow.getElementById('itemCondition').value = this._formData.itemCondition || '';
-        
-        return step;
-    }
-    
-    _createStep4() {
-    const step = document.createElement('div');
-    step.className = 'form-step';
-    step.id = 'step4';
-    
-    const currencies = this._getAllCurrencies();
-    const countries = this._getAllCountries();
-    
-    step.innerHTML = `
-        <div class="info-box">
-            <div class="info-box-title">🚚 About Merchant Listings</div>
-            <div class="info-box-text">
-                This section is REQUIRED if you want to appear in Google Shopping or Merchant Listings. Shipping and return
-                information helps customers make informed decisions and can improve your click-through rate.
-            </div>
-        </div>
-        
-        <div class="warning-box">
-            <div class="warning-box-title">⚠️ Google Shopping Requirements</div>
-            <div class="warning-box-text">
-                If you want your products to appear in Google Shopping (the shopping tab in search results), you MUST complete
-                all shipping and return policy fields. Without this information, your products will only show in regular search results.
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <div class="section-title">📦 Shipping Details</div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Shipping Cost <span class="form-label-badge">For Shopping</span></label>
-                    <input type="number" step="0.01" min="0" class="form-input" id="shippingCost" placeholder="0.00" value="${this._formData.shippingCost || ''}">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The shipping fee customers pay (use "0" for free shipping).<br>
-                        <strong>Example:</strong> "5.99" or "0" for free shipping<br>
-                        <strong>Required for:</strong> Google Shopping eligibility.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Shipping Currency <span class="form-label-badge">For Shopping</span></label>
-                    <select class="form-select" id="shippingCurrency">
-                        ${currencies.split('\n').map(line => {
-                            const match = line.match(/value="([^"]+)"/);
-                            if (match) {
-                                const code = match[1];
-                                return line.replace('>', this._formData.shippingCurrency === code ? ' selected>' : '>');
-                            }
-                            return line;
-                        }).join('\n')}
-                    </select>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Currency for the shipping cost.<br>
-                        <strong>Best practice:</strong> Should match your product price currency.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Shipping Destination <span class="form-label-badge">For Shopping</span></label>
-                <select class="form-select" id="shippingDestination">
-                    ${countries.split('\n').map(line => {
-                        const match = line.match(/value="([^"]+)"/);
-                        if (match) {
-                            const code = match[1];
-                            return line.replace('>', this._formData.shippingDestination === code ? ' selected>' : '>');
-                        }
-                        return line;
-                    }).join('\n')}
-                </select>
-                <div class="help-text">
-                    <strong>What it is:</strong> The country/region you ship to.<br>
-                    <strong>Example:</strong> "US" for United States, "GB" for United Kingdom<br>
-                    <strong>Required for:</strong> Google Shopping.
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Handling Time (Days) <span class="form-label-badge">Optional</span></label>
-                    <div class="form-row">
-                        <input type="number" min="0" class="form-input" id="handlingTimeMin" placeholder="Min: 0" value="${this._formData.handlingTimeMin || ''}">
-                        <input type="number" min="0" class="form-input" id="handlingTimeMax" placeholder="Max: 1" value="${this._formData.handlingTimeMax || ''}">
-                    </div>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Time to process and prepare the order before shipping.<br>
-                        <strong>Example:</strong> Min: 0, Max: 1 means "ships within 1 business day"
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Delivery Time (Days) <span class="form-label-badge">For Shopping</span></label>
-                    <div class="form-row">
-                        <input type="number" min="0" class="form-input" id="deliveryTimeMin" placeholder="Min: 2" value="${this._formData.deliveryTimeMin || ''}">
-                        <input type="number" min="0" class="form-input" id="deliveryTimeMax" placeholder="Max: 5" value="${this._formData.deliveryTimeMax || ''}">
-                    </div>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Transit time for shipping carrier to deliver.<br>
-                        <strong>Example:</strong> Min: 2, Max: 5 means "delivery in 2-5 business days"<br>
-                        <strong>Required for:</strong> Google Shopping.
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <div class="section-title">↩️ Return Policy</div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Return Window (Days) <span class="form-label-badge">For Shopping</span></label>
-                    <input type="number" min="0" class="form-input" id="returnDays" placeholder="30" value="${this._formData.returnDays || ''}">
-                    <div class="help-text">
-                        <strong>What it is:</strong> How many days customers have to return the product.<br>
-                        <strong>Example:</strong> "30" for a 30-day return window<br>
-                        <strong>Required for:</strong> Google Shopping.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Return Policy Country <span class="form-label-badge">For Shopping</span></label>
-                    <select class="form-select" id="returnCountry">
-                        ${countries.split('\n').map(line => {
-                            const match = line.match(/value="([^"]+)"/);
-                            if (match) {
-                                const code = match[1];
-                                return line.replace('>', this._formData.returnCountry === code ? ' selected>' : '>');
-                            }
-                            return line;
-                        }).join('\n')}
-                    </select>
-                    <div class="help-text">
-                        <strong>What it is:</strong> The country where your return policy applies.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Return Method <span class="form-label-badge">Optional</span></label>
-                    <select class="form-select" id="returnMethod">
-                        <option value="">-- Select Return Method --</option>
-                        <option value="https://schema.org/ReturnByMail" ${this._formData.returnMethod === 'https://schema.org/ReturnByMail' ? 'selected' : ''}>Return by Mail - Ship it back</option>
-                        <option value="https://schema.org/ReturnInStore" ${this._formData.returnMethod === 'https://schema.org/ReturnInStore' ? 'selected' : ''}>Return in Store - Return to physical location</option>
-                        <option value="https://schema.org/ReturnAtKiosk" ${this._formData.returnMethod === 'https://schema.org/ReturnAtKiosk' ? 'selected' : ''}>Return at Kiosk - Drop off at kiosk</option>
-                    </select>
-                    <div class="help-text">
-                        <strong>What it is:</strong> How customers can return products.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Return Fees <span class="form-label-badge">Optional</span></label>
-                    <select class="form-select" id="returnFees">
-                        <option value="">-- Select Return Fees --</option>
-                        <option value="https://schema.org/FreeReturn" ${this._formData.returnFees === 'https://schema.org/FreeReturn' ? 'selected' : ''}>Free Return - No charge for returns</option>
-                        <option value="https://schema.org/ReturnShippingFees" ${this._formData.returnFees === 'https://schema.org/ReturnShippingFees' ? 'selected' : ''}>Customer Pays Shipping - Customer pays return shipping</option>
-                        <option value="https://schema.org/RestockingFees" ${this._formData.returnFees === 'https://schema.org/RestockingFees' ? 'selected' : ''}>Restocking Fee - Deducted from refund</option>
-                    </select>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Who pays for return shipping.
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    return step;
-}
-
-_createStep5() {
-    const step = document.createElement('div');
-    step.className = 'form-step';
-    step.id = 'step5';
-    
-    step.innerHTML = `
-        <div class="info-box">
-            <div class="info-box-title">⭐ About Reviews & Ratings</div>
-            <div class="info-box-text">
-                Star ratings can dramatically increase click-through rates in search results. Products with reviews get 
-                12-15% more clicks on average. However, reviews MUST be genuine and from real customers.
-            </div>
-        </div>
-        
-        <div class="warning-box">
-            <div class="warning-box-title">⚠️ Critical: Fake Reviews Are Prohibited</div>
-            <div class="warning-box-text">
-                <strong>DO NOT create fake reviews!</strong> Google has sophisticated systems to detect fake reviews.
-                Violations can result in:<br>
-                • Manual penalties and ranking drops<br>
-                • Removal from Google Shopping<br>
-                • Permanent ban from rich results<br>
-                <br>
-                <strong>Only add reviews if:</strong><br>
-                ✓ They are from real customers who purchased the product<br>
-                ✓ You can verify them with order records<br>
-                ✓ They accurately represent customer sentiment<br>
-                <br>
-                When in doubt, don't add reviews manually - use a verified review platform like Trustpilot, Yotpo, or Google Customer Reviews instead.
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <div class="section-title">📊 Aggregate Rating</div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Average Rating <span class="form-label-badge">Optional</span></label>
-                    <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue" placeholder="4.5" value="${this._formData.aggregateRatingValue || ''}">
-                    <div class="help-text">
-                        <strong>What it is:</strong> The average rating across all reviews (0 to 5 stars).<br>
-                        <strong>Example:</strong> "4.5" for 4.5 out of 5 stars<br>
-                        <strong>Best practice:</strong> Must match your actual review platform data.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Total Review Count <span class="form-label-badge">Optional</span></label>
-                    <input type="number" min="0" class="form-input" id="reviewCount" placeholder="89" value="${this._formData.reviewCount || ''}">
-                    <div class="help-text">
-                        <strong>What it is:</strong> Total number of reviews received.<br>
-                        <strong>Example:</strong> "89" if you have 89 reviews<br>
-                        <strong>Minimum:</strong> Need at least 1 review for stars to show.
-                    </div>
-                </div>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Best Rating <span class="form-label-badge">Optional</span></label>
-                    <input type="number" min="1" class="form-input" id="bestRating" value="${this._formData.bestRating || '5'}" readonly>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Highest possible rating (usually 5).<br>
-                        <strong>Default:</strong> 5 stars (standard rating scale).
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Worst Rating <span class="form-label-badge">Optional</span></label>
-                    <input type="number" min="1" class="form-input" id="worstRating" value="${this._formData.worstRating || '1'}" readonly>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Lowest possible rating (usually 1).<br>
-                        <strong>Default:</strong> 1 star (standard rating scale).
-                    </div>
-                </div>
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <div class="section-title">💬 Individual Reviews</div>
-            
-            <div id="reviewsList" class="dynamic-list">
-                <!-- Reviews will be added here -->
-            </div>
-            
-            <button type="button" class="btn-add" id="addReview">
-                + Add Review
-            </button>
-        </div>
-    `;
-    
-    // Set up the add review button after a slight delay to ensure DOM is ready
-    setTimeout(() => {
-        const addReviewBtn = step.querySelector('#addReview');
-        if (addReviewBtn) {
-            addReviewBtn.addEventListener('click', () => {
-                console.log('🔷 Dashboard: Add review clicked');
-                this._addReview();
-            });
-        }
-        
-        // Render existing reviews
-        this._renderReviews();
-    }, 0);
-    
-    return step;
-}
-
-_createStep6() {
-    const step = document.createElement('div');
-    step.className = 'form-step';
-    step.id = 'step6';
-    
-    step.innerHTML = `
-        <div class="info-box">
-            <div class="info-box-title">❓ About FAQ Schema</div>
-            <div class="info-box-text">
-                FAQ schema can get your product featured with expandable question/answer sections directly in search results.
-                This can significantly increase visibility and click-through rates.
-            </div>
-        </div>
-        
-        <div class="warning-box">
-            <div class="warning-box-title">⚠️ Important: FAQ Best Practices</div>
-            <div class="warning-box-text">
-                <strong>Only add FAQs if they actually exist on your product page!</strong><br>
-                <br>
-                ✓ FAQs must be visible to users on the page<br>
-                ✓ Questions should be genuine customer questions<br>
-                ✓ Answers should be factual and helpful<br>
-                ✓ Don't use FAQs for advertising or promotional content<br>
-                ✓ Minimum 2 Q&A pairs recommended<br>
-                <br>
-                <strong>Violations can result in manual penalties.</strong>
-            </div>
-        </div>
-        
-        <div class="form-section">
-            <div class="section-title">❓ Frequently Asked Questions</div>
-            
-            <div id="faqsList" class="dynamic-list">
-                <!-- FAQs will be added here -->
-            </div>
-            
-            <button type="button" class="btn-add" id="addFaq">
-                + Add FAQ
-            </button>
-        </div>
-        
-        <div class="form-section">
-            <div class="section-title">🌐 Social Media / Open Graph</div>
-            
-            <div class="form-group">
-                <label class="form-label">Open Graph Title <span class="form-label-badge">Optional</span></label>
-                <input type="text" class="form-input" id="ogTitle" maxlength="60" value="${this._formData.ogTitle || ''}">
-                <div class="help-text">
-                    <strong>What it is:</strong> Title shown when shared on Facebook, LinkedIn, etc.<br>
-                    <strong>Can leave empty:</strong> Yes, will use page title if empty.
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Open Graph Description <span class="form-label-badge">Optional</span></label>
-                <textarea class="form-textarea" id="ogDescription" maxlength="200" rows="3">${this._formData.ogDescription || ''}</textarea>
-                <div class="help-text">
-                    <strong>What it is:</strong> Description shown when shared on social media.<br>
-                    <strong>Can leave empty:</strong> Yes, will use meta description if empty.
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Open Graph Image <span class="form-label-badge">Optional</span></label>
-                <input type="url" class="form-input" id="ogImage" placeholder="https://example.com/product-image.jpg" value="${this._formData.ogImage || ''}">
-                <div class="help-text">
-                    <strong>What it is:</strong> Image shown in social media previews.<br>
-                    <strong>Recommended size:</strong> 1200x630 pixels<br>
-                    <strong>Can leave empty:</strong> Yes, will use first product image.
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Twitter Card Type <span class="form-label-badge">Optional</span></label>
-                <select class="form-select" id="twitterCard">
-                    <option value="summary" ${this._formData.twitterCard === 'summary' ? 'selected' : ''}>Summary - Small image card</option>
-                    <option value="summary_large_image" ${this._formData.twitterCard === 'summary_large_image' ? 'selected' : ''}>Summary Large Image - Large image card (Recommended)</option>
-                    <option value="product" ${this._formData.twitterCard === 'product' ? 'selected' : ''}>Product - Product-specific card</option>
-                </select>
-                <div class="help-text">
-                    <strong>What it is:</strong> How your product appears when shared on Twitter/X.<br>
-                    <strong>Best practice:</strong> Use "Summary Large Image" for products.
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Set up the add FAQ button after a slight delay to ensure DOM is ready
-    setTimeout(() => {
-        const addFaqBtn = step.querySelector('#addFaq');
-        if (addFaqBtn) {
-            addFaqBtn.addEventListener('click', () => {
-                console.log('🔷 Dashboard: Add FAQ clicked');
-                this._addFaq();
-            });
-        }
-        
-        // Render existing FAQs
-        this._renderFaqs();
-    }, 0);
-    
-    return step;
-}
-
-_renderReviews() {
-    const reviewsList = this._shadow.getElementById('reviewsList');
-    
-    if (!reviewsList) {
-        console.warn('🔷 Dashboard: reviewsList element not found');
-        return;
-    }
-    
-    reviewsList.innerHTML = '';
-    
-    if (this._reviews.length === 0) {
-        reviewsList.innerHTML = '<p style="color: #6b7280; font-style: italic; padding: 20px; text-align: center;">No reviews added yet. Click "Add Review" to add one.</p>';
-        return;
-    }
-    
-    this._reviews.forEach((review, index) => {
-        const reviewItem = document.createElement('div');
-        reviewItem.className = 'dynamic-item';
-        reviewItem.innerHTML = `
-            <div class="dynamic-item-header">
-                <div class="dynamic-item-title">Review #${index + 1}</div>
-                <button type="button" class="btn-remove" data-index="${index}">Remove</button>
-            </div>
-            
-            <div class="form-row">
-                <div class="form-group">
-                    <label class="form-label">Reviewer Name</label>
-                    <input type="text" class="form-input review-author" data-index="${index}" value="${review.author || ''}" placeholder="John Smith">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Rating (1-5)</label>
-                    <input type="number" min="1" max="5" class="form-input review-rating" data-index="${index}" value="${review.rating || ''}" placeholder="5">
-                </div>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Review Title <span class="form-label-badge">Optional</span></label>
-                <input type="text" class="form-input review-title" data-index="${index}" value="${review.title || ''}" placeholder="Great product!">
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Review Text <span class="form-label-badge">Optional</span></label>
-                <textarea class="form-textarea review-text" data-index="${index}" rows="3" placeholder="This product exceeded my expectations...">${review.text || ''}</textarea>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Review Date <span class="form-label-badge">Optional</span></label>
-                <input type="date" class="form-input review-date" data-index="${index}" value="${review.date || ''}">
-            </div>
-        `;
-        
-        reviewsList.appendChild(reviewItem);
-        
-        // Add remove listener
-        reviewItem.querySelector('.btn-remove').addEventListener('click', (e) => {
-            const idx = parseInt(e.target.dataset.index);
-            this._reviews.splice(idx, 1);
-            this._renderReviews();
-        });
-        
-        // Add change listeners
-        reviewItem.querySelector('.review-author').addEventListener('input', (e) => {
-            this._reviews[index].author = e.target.value;
-        });
-        
-        reviewItem.querySelector('.review-rating').addEventListener('input', (e) => {
-            this._reviews[index].rating = e.target.value;
-        });
-        
-        reviewItem.querySelector('.review-title').addEventListener('input', (e) => {
-            this._reviews[index].title = e.target.value;
-        });
-        
-        reviewItem.querySelector('.review-text').addEventListener('input', (e) => {
-            this._reviews[index].text = e.target.value;
-        });
-        
-        reviewItem.querySelector('.review-date').addEventListener('input', (e) => {
-            this._reviews[index].date = e.target.value;
-        });
-    });
-}
-
-_addReview() {
-    this._reviews.push({
-        author: '',
-        rating: '',
-        title: '',
-        text: '',
-        date: ''
-    });
-    this._renderReviews();
-}
-
-_renderFaqs() {
-    const faqsList = this._shadow.getElementById('faqsList');
-    
-    if (!faqsList) {
-        console.warn('🔷 Dashboard: faqsList element not found');
-        return;
-    }
-    
-    faqsList.innerHTML = '';
-    
-    if (this._faqs.length === 0) {
-        faqsList.innerHTML = '<p style="color: #6b7280; font-style: italic; padding: 20px; text-align: center;">No FAQs added yet. Click "Add FAQ" to add one.</p>';
-        return;
-    }
-    
-    this._faqs.forEach((faq, index) => {
-        const faqItem = document.createElement('div');
-        faqItem.className = 'dynamic-item';
-        faqItem.innerHTML = `
-            <div class="dynamic-item-header">
-                <div class="dynamic-item-title">FAQ #${index + 1}</div>
-                <button type="button" class="btn-remove" data-index="${index}">Remove</button>
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Question</label>
-                <input type="text" class="form-input faq-question" data-index="${index}" value="${faq.question || ''}" placeholder="What is the warranty period?">
-            </div>
-            
-            <div class="form-group">
-                <label class="form-label">Answer</label>
-                <textarea class="form-textarea faq-answer" data-index="${index}" rows="3" placeholder="This product comes with a 2-year manufacturer warranty...">${faq.answer || ''}</textarea>
-            </div>
-        `;
-        
-        faqsList.appendChild(faqItem);
-        
-        // Add remove listener
-        faqItem.querySelector('.btn-remove').addEventListener('click', (e) => {
-            const idx = parseInt(e.target.dataset.index);
-            this._faqs.splice(idx, 1);
-            this._renderFaqs();
-        });
-        
-        // Add change listeners
-        faqItem.querySelector('.faq-question').addEventListener('input', (e) => {
-            this._faqs[index].question = e.target.value;
-        });
-        
-        faqItem.querySelector('.faq-answer').addEventListener('input', (e) => {
-            this._faqs[index].answer = e.target.value;
-        });
-    });
-}
-
-_addFaq() {
-    this._faqs.push({
-        question: '',
-        answer: ''
-    });
-    this._renderFaqs();
-}
-    
-    _updateStepDisplay() {
-        const steps = this._shadow.querySelectorAll('.form-step');
-        const dots = this._shadow.querySelectorAll('.step-dot');
-        const prevBtn = this._shadow.getElementById('prevStep');
-        const nextBtn = this._shadow.getElementById('nextStep');
-        const saveBtn = this._shadow.getElementById('saveBtn');
-        const progressFill = this._shadow.getElementById('progressFill');
-        const stepTitle = this._shadow.getElementById('stepTitle');
-        const stepDescription = this._shadow.getElementById('stepDescription');
-        
-        // Hide all steps
-        steps.forEach(step => step.classList.remove('active'));
-        
-        // Show current step
-        const currentStepEl = this._shadow.getElementById(`step${this._currentStep}`);
-        if (currentStepEl) {
-            currentStepEl.classList.add('active');
-        }
-        
-        // Update dots
-        dots.forEach((dot, index) => {
-            dot.classList.remove('active', 'completed');
-            if (index + 1 < this._currentStep) {
-                dot.classList.add('completed');
-            } else if (index + 1 === this._currentStep) {
-                dot.classList.add('active');
-            }
-        });
-        
-        // Update progress bar
-        const progress = (this._currentStep / this._totalSteps) * 100;
-        progressFill.style.width = progress + '%';
-        
-        // Update step title and description
-        const stepInfo = {
-            1: { title: 'Basic SEO Information', description: 'Page title, description, and core meta tags' },
-            2: { title: 'Product Schema', description: 'Identifiers, brand, and product images' },
-            3: { title: 'Pricing & Offers', description: 'Price, currency, availability, and condition' },
-            4: { title: 'Merchant Listing', description: 'Shipping and return policy information' },
-            5: { title: 'Reviews & Ratings', description: 'Customer reviews and aggregate ratings' },
-            6: { title: 'FAQ & Advanced', description: 'FAQ schema and social media tags' }
+        // Initialize form data
+        this._formData = {
+            productName: product.name,
+            description: '',
+            metaKeywords: '',
+            canonicalUrl: '',
+            robotsContent: 'index, follow',
+            sku: '',
+            mpn: '',
+            gtin: '',
+            isbn: '',
+            brandName: '',
+            imageUrls: [],
+            price: '',
+            priceCurrency: 'USD',
+            priceValidUntil: '',
+            availability: '',
+            itemCondition: '',
+            offerUrl: '',
+            shippingCost: '',
+            shippingCurrency: 'USD',
+            shippingDestination: '',
+            handlingTimeMin: '',
+            handlingTimeMax: '',
+            deliveryTimeMin: '',
+            deliveryTimeMax: '',
+            returnDays: '',
+            returnCountry: '',
+            returnMethod: '',
+            returnFees: '',
+            aggregateRatingValue: '',
+            reviewCount: '',
+            bestRating: '5',
+            worstRating: '1',
+            ogTitle: '',
+            ogDescription: '',
+            ogImage: '',
+            twitterCard: 'summary_large_image'
         };
         
-        stepTitle.textContent = stepInfo[this._currentStep].title;
-        stepDescription.textContent = stepInfo[this._currentStep].description;
-        
-        // Show/hide buttons
-        prevBtn.style.display = this._currentStep === 1 ? 'none' : 'inline-flex';
-        nextBtn.style.display = this._currentStep === this._totalSteps ? 'none' : 'inline-flex';
-        saveBtn.style.display = this._currentStep === this._totalSteps ? 'inline-flex' : 'none';
-        
-        // Scroll to top
-        this._shadow.getElementById('formBody').scrollTop = 0;
-    }
-    
-    _previousStep() {
-        if (this._currentStep > 1) {
-            this._collectCurrentStepData();
-            this._currentStep--;
-            this._updateStepDisplay();
-        }
-    }
-    
-    _nextStep() {
-        if (this._currentStep < this._totalSteps) {
-            if (this._validateCurrentStep()) {
-                this._collectCurrentStepData();
-                this._currentStep++;
-                this._updateStepDisplay();
-            }
-        }
-    }
-    
-    _validateCurrentStep() {
-        // Step 1 validation
-        if (this._currentStep === 1) {
-            const productName = this._shadow.getElementById('productName').value.trim();
-            const description = this._shadow.getElementById('description').value.trim();
-            
-            if (!productName) {
-                alert('Please enter a product name');
-                return false;
-            }
-            
-            if (!description) {
-                alert('Please enter a meta description');
-                return false;
+        // Populate from existing data
+        if (seoData && seoData.seoData) {
+            try {
+                const data = typeof seoData.seoData === 'string' 
+                    ? JSON.parse(seoData.seoData) 
+                    : seoData.seoData;
+                
+                Object.assign(this._formData, data);
+                
+                if (data.reviews) this._reviews = data.reviews;
+                if (data.faqs) this._faqs = data.faqs;
+            } catch (e) {
+                console.error('Error parsing SEO data:', e);
             }
         }
         
-        // Step 3 validation
-        if (this._currentStep === 3) {
-            const price = this._shadow.getElementById('price').value.trim();
-            const priceCurrency = this._shadow.getElementById('priceCurrency').value;
-            const availability = this._shadow.getElementById('availability').value;
+        // Render form
+        this._renderForm();
+        
+        // Show form view
+        const productsView = this._shadow.getElementById('productsView');
+        const formView = this._shadow.getElementById('formView');
+        
+        productsView.classList.remove('active');
+        formView.classList.add('active');
+    }
+
+    _renderForm() {
+        const formBody = this._shadow.getElementById('formBody');
+        
+        const currencies = this._getAllCurrencies();
+        const countries = this._getAllCountries();
+        const imageUrlsValue = (this._formData.imageUrls && Array.isArray(this._formData.imageUrls)) 
+            ? this._formData.imageUrls.join('\n') 
+            : '';
+        
+        formBody.innerHTML = `
+            <div class="info-box">
+                <div class="info-box-title">📋 Product SEO Optimization</div>
+                <div class="info-box-text">
+                    Complete the fields below to optimize your product for search engines. Fields marked with * are required for basic SEO. 
+                    Additional fields improve your chances of appearing in Google Shopping and rich results. You can expand/collapse sections by clicking on them.
+                </div>
+            </div>
             
-            if (!price) {
-                alert('Please enter a price');
-                return false;
+            <!-- Section 1: Basic SEO -->
+            <div class="form-section">
+                <div class="section-header" data-section="basic">
+                    <div class="section-title">📝 Basic SEO Information</div>
+                    <div class="section-toggle">▼</div>
+                </div>
+                <div class="section-content" data-content="basic">
+                    <div class="form-group">
+                        <label class="form-label required">Product Name (Title Tag)</label>
+                        <input type="text" class="form-input" id="productName" maxlength="60" value="${this._formData.productName || ''}">
+                        <div class="help-text">
+                            <strong>What it is:</strong> The main title shown in search results and browser tabs.<br>
+                            <strong>Best practice:</strong> Keep under 60 characters. Include main keyword at the beginning.<br>
+                            <strong>Example:</strong> "Wireless Noise-Canceling Headphones - Premium Audio"
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label required">Meta Description</label>
+                        <textarea class="form-textarea" id="description" maxlength="160" rows="3">${this._formData.description || ''}</textarea>
+                        <div class="help-text">
+                            <strong>What it is:</strong> The summary text shown below your title in search results.<br>
+                            <strong>Best practice:</strong> 150-160 characters. Include a call-to-action and main benefits.<br>
+                            <strong>Example:</strong> "Experience superior sound quality with 30-hour battery life. Active noise cancellation blocks out distractions. Free shipping on orders over $50."
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Meta Keywords <span class="form-label-badge">Optional</span></label>
+                        <input type="text" class="form-input" id="metaKeywords" placeholder="wireless headphones, noise canceling, bluetooth" value="${this._formData.metaKeywords || ''}">
+                        <div class="help-text">
+                            <strong>What it is:</strong> Comma-separated keywords related to your product.<br>
+                            <strong>Note:</strong> Google doesn't use this for ranking, but some other search engines might.<br>
+                            <strong>Can leave empty:</strong> Yes, this is completely optional.
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Canonical URL <span class="form-label-badge">Optional</span></label>
+                            <input type="url" class="form-input" id="canonicalUrl" placeholder="https://yourstore.com/products/headphones" value="${this._formData.canonicalUrl || ''}">
+                            <div class="help-text">
+                                <strong>What it is:</strong> The preferred URL for this product.<br>
+                                <strong>Can leave empty:</strong> Yes, auto-generated if blank.
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Robots Directive</label>
+                            <select class="form-select" id="robotsContent">
+                                <option value="index, follow" ${this._formData.robotsContent === 'index, follow' ? 'selected' : ''}>Index & Follow (Recommended)</option>
+                                <option value="index, nofollow" ${this._formData.robotsContent === 'index, nofollow' ? 'selected' : ''}>Index but Don't Follow</option>
+                                <option value="noindex, follow" ${this._formData.robotsContent === 'noindex, follow' ? 'selected' : ''}>Don't Index but Follow</option>
+                                <option value="noindex, nofollow" ${this._formData.robotsContent === 'noindex, nofollow' ? 'selected' : ''}>Don't Index or Follow</option>
+                            </select>
+                            <div class="help-text">
+                                <strong>Best practice:</strong> Use "Index & Follow" for products you want in search.
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 2: Product Schema -->
+            <div class="form-section">
+                <div class="section-header collapsed" data-section="schema">
+                    <div class="section-title">🏷️ Product Schema & Identifiers</div>
+                    <div class="section-toggle">▼</div>
+                </div>
+                <div class="section-content collapsed" data-content="schema">
+                    <div class="warning-box">
+                        <div class="warning-box-title">⚠️ Important: Product Identifiers</div>
+                        <div class="warning-box-text">
+                            At least ONE of these identifiers (GTIN, MPN, or Brand) is required for Google Shopping. Having all three greatly increases visibility.
+                        </div>
+                    </div>
+                    
+                    <div class="form-row-3">
+                        <div class="form-group">
+                            <label class="form-label">SKU <span class="form-label-badge">Recommended</span></label>
+                            <input type="text" class="form-input" id="sku" placeholder="PROD-12345" value="${this._formData.sku || ''}">
+                            <div class="help-text">
+                                <strong>What it is:</strong> Your internal product code.<br>
+                                <strong>Example:</strong> "HDN-WL-BLK-001"
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">MPN <span class="form-label-badge">Recommended</span></label>
+                            <input type="text" class="form-input" id="mpn" placeholder="MFR123456" value="${this._formData.mpn || ''}">
+                            <div class="help-text">
+                                <strong>What it is:</strong> Manufacturer Part Number.<br>
+                                <strong>Example:</strong> "WH-1000XM4"
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">GTIN <span class="form-label-badge">Highly Recommended</span></label>
+                            <input type="text" class="form-input" id="gtin" placeholder="00012345678905" value="${this._formData.gtin || ''}">
+                            <div class="help-text">
+                                <strong>What it is:</strong> Global Trade Item Number (UPC/EAN).<br>
+                                <strong>Example:</strong> "00012345678905"
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">ISBN <span class="form-label-badge">For Books Only</span></label>
+                            <input type="text" class="form-input" id="isbn" placeholder="978-3-16-148410-0" value="${this._formData.isbn || ''}">
+                            <div class="help-text">
+                                <strong>What it is:</strong> For books only.<br>
+                                <strong>Can leave empty:</strong> Yes, unless selling books.
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Brand Name <span class="form-label-badge">Highly Recommended</span></label>
+                            <input type="text" class="form-input" id="brandName" placeholder="Sony" value="${this._formData.brandName || ''}">
+                            <div class="help-text">
+                                <strong>Examples:</strong> "Sony", "Nike", "Apple"<br>
+                                <strong>Required for:</strong> Google Shopping.
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Image URLs <span class="form-label-badge">Highly Recommended</span></label>
+                        <textarea class="form-textarea" id="imageUrls" rows="5" placeholder="https://example.com/image1.jpg&#10;https://example.com/image2.jpg">${imageUrlsValue}</textarea>
+                        <div class="help-text">
+                            <strong>Format:</strong> One URL per line. Minimum 800x800px. Use JPG, PNG, or WebP.<br>
+                            <strong>Best practice:</strong> Add 3-5 images from different angles.
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 3: Pricing & Offers -->
+            <div class="form-section">
+                <div class="section-header collapsed" data-section="pricing">
+                    <div class="section-title">💰 Pricing & Offers</div>
+                    <div class="section-toggle">▼</div>
+                </div>
+                <div class="section-content collapsed" data-content="pricing">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label required">Price</label>
+                            <input type="number" step="0.01" min="0" class="form-input" id="price" placeholder="99.99" value="${this._formData.price || ''}">
+                            <div class="help-text">
+                                <strong>Required:</strong> Numbers only, no currency symbols.<br>
+                                <strong>Example:</strong> "99.99"
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label required">Currency</label>
+                            <select class="form-select" id="priceCurrency">
+                                ${currencies}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Price Valid Until <span class="form-label-badge">Recommended</span></label>
+                            <input type="date" class="form-input" id="priceValidUntil" value="${this._formData.priceValidUntil || ''}">
+                            <div class="help-text">
+                                <strong>Best practice:</strong> Set at least 30 days in future.
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Product Page URL <span class="form-label-badge">Optional</span></label>
+                            <input type="url" class="form-input" id="offerUrl" placeholder="https://yourstore.com/products/product-name" value="${this._formData.offerUrl || ''}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label required">Availability Status</label>
+                            <select class="form-select" id="availability">
+                                <option value="">-- Select Availability --</option>
+                                <option value="https://schema.org/InStock" ${this._formData.availability === 'https://schema.org/InStock' ? 'selected' : ''}>In Stock</option>
+                                <option value="https://schema.org/OutOfStock" ${this._formData.availability === 'https://schema.org/OutOfStock' ? 'selected' : ''}>Out of Stock</option>
+                                <option value="https://schema.org/PreOrder" ${this._formData.availability === 'https://schema.org/PreOrder' ? 'selected' : ''}>Pre-Order</option>
+                                <option value="https://schema.org/Discontinued" ${this._formData.availability === 'https://schema.org/Discontinued' ? 'selected' : ''}>Discontinued</option>
+                                <option value="https://schema.org/LimitedAvailability" ${this._formData.availability === 'https://schema.org/LimitedAvailability' ? 'selected' : ''}>Limited Availability</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Item Condition <span class="form-label-badge">Recommended</span></label>
+                            <select class="form-select" id="itemCondition">
+                                <option value="">-- Select Condition --</option>
+                                <option value="https://schema.org/NewCondition" ${this._formData.itemCondition === 'https://schema.org/NewCondition' ? 'selected' : ''}>New</option>
+                                <option value="https://schema.org/RefurbishedCondition" ${this._formData.itemCondition === 'https://schema.org/RefurbishedCondition' ? 'selected' : ''}>Refurbished</option>
+                                <option value="https://schema.org/UsedCondition" ${this._formData.itemCondition === 'https://schema.org/UsedCondition' ? 'selected' : ''}>Used</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 4: Merchant Listing -->
+            <div class="form-section">
+                <div class="section-header collapsed" data-section="merchant">
+                    <div class="section-title">🚚 Merchant Listing (Shipping & Returns)</div>
+                    <div class="section-toggle">▼</div>
+                </div>
+                <div class="section-content collapsed" data-content="merchant">
+                    <div class="warning-box">
+                        <div class="warning-box-title">⚠️ Google Shopping Requirements</div>
+                        <div class="warning-box-text">
+                            Complete these fields to appear in Google Shopping. Without shipping and return information, your products will only show in regular search results.
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Shipping Cost <span class="form-label-badge">For Shopping</span></label>
+                            <input type="number" step="0.01" min="0" class="form-input" id="shippingCost" placeholder="0.00" value="${this._formData.shippingCost || ''}">
+                            <div class="help-text">
+                                <strong>Example:</strong> Use "0" for free shipping.
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Shipping Currency</label>
+                            <select class="form-select" id="shippingCurrency">
+                                ${currencies}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Shipping Destination <span class="form-label-badge">For Shopping</span></label>
+                        <select class="form-select" id="shippingDestination">
+                            ${countries}
+                        </select>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Handling Time (Days)</label>
+                            <div class="form-row">
+                                <input type="number" min="0" class="form-input" id="handlingTimeMin" placeholder="Min: 0" value="${this._formData.handlingTimeMin || ''}">
+                                <input type="number" min="0" class="form-input" id="handlingTimeMax" placeholder="Max: 1" value="${this._formData.handlingTimeMax || ''}">
+                            </div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Delivery Time (Days) <span class="form-label-badge">For Shopping</span></label>
+                            <div class="form-row">
+                                <input type="number" min="0" class="form-input" id="deliveryTimeMin" placeholder="Min: 2" value="${this._formData.deliveryTimeMin || ''}">
+                                <input type="number" min="0" class="form-input" id="deliveryTimeMax" placeholder="Max: 5" value="${this._formData.deliveryTimeMax || ''}">
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Return Window (Days) <span class="form-label-badge">For Shopping</span></label>
+                            <input type="number" min="0" class="form-input" id="returnDays" placeholder="30" value="${this._formData.returnDays || ''}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Return Policy Country</label>
+                            <select class="form-select" id="returnCountry">
+                                ${countries}
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Return Method</label>
+                            <select class="form-select" id="returnMethod">
+                                <option value="">-- Select --</option>
+                                <option value="https://schema.org/ReturnByMail" ${this._formData.returnMethod === 'https://schema.org/ReturnByMail' ? 'selected' : ''}>Return by Mail</option>
+                                <option value="https://schema.org/ReturnInStore" ${this._formData.returnMethod === 'https://schema.org/ReturnInStore' ? 'selected' : ''}>Return in Store</option>
+                            </select>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Return Fees</label>
+                            <select class="form-select" id="returnFees">
+                                <option value="">-- Select --</option>
+                                <option value="https://schema.org/FreeReturn" ${this._formData.returnFees === 'https://schema.org/FreeReturn' ? 'selected' : ''}>Free Return</option>
+                                <option value="https://schema.org/ReturnShippingFees" ${this._formData.returnFees === 'https://schema.org/ReturnShippingFees' ? 'selected' : ''}>Customer Pays Shipping</option>
+                                <option value="https://schema.org/RestockingFees" ${this._formData.returnFees === 'https://schema.org/RestockingFees' ? 'selected' : ''}>Restocking Fee</option>
+                            </select>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 5: Reviews & Ratings -->
+            <div class="form-section">
+                <div class="section-header collapsed" data-section="reviews">
+                    <div class="section-title">⭐ Reviews & Ratings</div>
+                    <div class="section-toggle">▼</div>
+                </div>
+                <div class="section-content collapsed" data-content="reviews">
+                    <div class="warning-box">
+                        <div class="warning-box-title">⚠️ Critical: Fake Reviews Are Prohibited</div>
+                        <div class="warning-box-text">
+                            <strong>DO NOT create fake reviews!</strong> Only add genuine reviews from real customers. Violations can result in penalties and bans from Google Shopping.
+                        </div>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Average Rating <span class="form-label-badge">Optional</span></label>
+                            <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue" placeholder="4.5" value="${this._formData.aggregateRatingValue || ''}">
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Total Review Count</label>
+                            <input type="number" min="0" class="form-input" id="reviewCount" placeholder="89" value="${this._formData.reviewCount || ''}">
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Individual Reviews <span class="form-label-badge">Optional</span></label>
+                        <div id="reviewsList" class="dynamic-list"></div>
+                        <button type="button" class="btn-add" id="addReview">+ Add Review</button>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Section 6: FAQ & Advanced -->
+            <div class="form-section">
+                <div class="section-header collapsed" data-section="faq">
+                    <div class="section-title">❓ FAQ & Social Media</div>
+                    <div class="section-toggle">▼</div>
+                </div>
+                <div class="section-content collapsed" data-content="faq">
+                    <div class="warning-box">
+                        <div class="warning-box-title">⚠️ FAQ Best Practices</div>
+                        <div class="warning-box-text">
+                            <strong>Only add FAQs if they actually exist on your product page!</strong> FAQs must be visible to users. Don't use for promotional content.
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Frequently Asked Questions</label>
+                        <div id="faqsList" class="dynamic-list"></div>
+                        <button type="button" class="btn-add" id="addFaq">+ Add FAQ</button>
+                    </div>
+                    
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label class="form-label">Open Graph Title <span class="form-label-badge">Optional</span></label>
+                            <input type="text" class="form-input" id="ogTitle" value="${this._formData.ogTitle || ''}">
+                            <div class="help-text">For social media sharing (Facebook, LinkedIn)</div>
+                        </div>
+                        
+                        <div class="form-group">
+                            <label class="form-label">Open Graph Image</label>
+                            <input type="url" class="form-input" id="ogImage" value="${this._formData.ogImage || ''}">
+                            <div class="help-text">Recommended: 1200x630 pixels</div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Open Graph Description</label>
+                        <textarea class="form-textarea" id="ogDescription" rows="3">${this._formData.ogDescription || ''}</textarea>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Twitter Card Type</label>
+                        <select class="form-select" id="twitterCard">
+                            <option value="summary" ${this._formData.twitterCard === 'summary' ? 'selected' : ''}>Summary</option>
+                            <option value="summary_large_image" ${this._formData.twitterCard === 'summary_large_image' ? 'selected' : ''}>Summary Large Image (Recommended)</option>
+                            <option value="product" ${this._formData.twitterCard === 'product' ? 'selected' : ''}>Product</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Set up collapsible sections
+        const sectionHeaders = formBody.querySelectorAll('.section-header');
+        sectionHeaders.forEach(header => {
+            header.addEventListener('click', () => {
+                const sectionName = header.dataset.section;
+                const content = formBody.querySelector(`[data-content="${sectionName}"]`);
+                header.classList.toggle('collapsed');
+                content.classList.toggle('collapsed');
+            });
+        });
+        
+        // Set selected values for dropdowns
+        setTimeout(() => {
+            const priceCurrency = formBody.querySelector('#priceCurrency');
+            if (priceCurrency) priceCurrency.value = this._formData.priceCurrency || 'USD';
+            
+            const shippingCurrency = formBody.querySelector('#shippingCurrency');
+            if (shippingCurrency) shippingCurrency.value = this._formData.shippingCurrency || 'USD';
+            
+            const shippingDestination = formBody.querySelector('#shippingDestination');
+            if (shippingDestination) shippingDestination.value = this._formData.shippingDestination || '';
+            
+            const returnCountry = formBody.querySelector('#returnCountry');
+            if (returnCountry) returnCountry.value = this._formData.returnCountry || '';
+            
+            // Render reviews and FAQs
+            this._renderReviews();
+            this._renderFaqs();
+            
+            // Set up add buttons
+            const addReviewBtn = formBody.querySelector('#addReview');
+            if (addReviewBtn) {
+                addReviewBtn.addEventListener('click', () => this._addReview());
             }
             
-            if (!priceCurrency) {
-                alert('Please select a currency');
-                return false;
+            const addFaqBtn = formBody.querySelector('#addFaq');
+            if (addFaqBtn) {
+                addFaqBtn.addEventListener('click', () => this._addFaq());
             }
+        }, 0);
+    }
+
+_renderReviews() {
+        const reviewsList = this._shadow.getElementById('reviewsList');
+        
+        if (!reviewsList) {
+            console.warn('🔷 Dashboard: reviewsList element not found');
+            return;
+        }
+        
+        reviewsList.innerHTML = '';
+        
+        if (this._reviews.length === 0) {
+            reviewsList.innerHTML = '<p style="color: #6b7280; font-style: italic; padding: 20px; text-align: center;">No reviews added yet. Click "Add Review" to add one.</p>';
+            return;
+        }
+        
+        this._reviews.forEach((review, index) => {
+            const reviewItem = document.createElement('div');
+            reviewItem.className = 'dynamic-item';
+            reviewItem.innerHTML = `
+                <div class="dynamic-item-header">
+                    <div class="dynamic-item-title">Review #${index + 1}</div>
+                    <button type="button" class="btn-remove" data-index="${index}">Remove</button>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="form-label">Reviewer Name</label>
+                        <input type="text" class="form-input review-author" data-index="${index}" value="${review.author || ''}" placeholder="John Smith">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="form-label">Rating (1-5)</label>
+                        <input type="number" min="1" max="5" class="form-input review-rating" data-index="${index}" value="${review.rating || ''}" placeholder="5">
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Review Title <span class="form-label-badge">Optional</span></label>
+                    <input type="text" class="form-input review-title" data-index="${index}" value="${review.title || ''}" placeholder="Great product!">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Review Text <span class="form-label-badge">Optional</span></label>
+                    <textarea class="form-textarea review-text" data-index="${index}" rows="3" placeholder="This product exceeded my expectations...">${review.text || ''}</textarea>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Review Date <span class="form-label-badge">Optional</span></label>
+                    <input type="date" class="form-input review-date" data-index="${index}" value="${review.date || ''}">
+                </div>
+            `;
             
-            if (!availability) {
-                alert('Please select availability status');
-                return false;
-            }
+            reviewsList.appendChild(reviewItem);
+            
+            // Add remove listener
+            reviewItem.querySelector('.btn-remove').addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                this._reviews.splice(idx, 1);
+                this._renderReviews();
+            });
+            
+            // Add change listeners
+            reviewItem.querySelector('.review-author').addEventListener('input', (e) => {
+                this._reviews[index].author = e.target.value;
+            });
+            
+            reviewItem.querySelector('.review-rating').addEventListener('input', (e) => {
+                this._reviews[index].rating = e.target.value;
+            });
+            
+            reviewItem.querySelector('.review-title').addEventListener('input', (e) => {
+                this._reviews[index].title = e.target.value;
+            });
+            
+            reviewItem.querySelector('.review-text').addEventListener('input', (e) => {
+                this._reviews[index].text = e.target.value;
+            });
+            
+            reviewItem.querySelector('.review-date').addEventListener('input', (e) => {
+                this._reviews[index].date = e.target.value;
+            });
+        });
+    }
+    
+    _addReview() {
+        this._reviews.push({
+            author: '',
+            rating: '',
+            title: '',
+            text: '',
+            date: ''
+        });
+        this._renderReviews();
+    }
+    
+    _renderFaqs() {
+        const faqsList = this._shadow.getElementById('faqsList');
+        
+        if (!faqsList) {
+            console.warn('🔷 Dashboard: faqsList element not found');
+            return;
+        }
+        
+        faqsList.innerHTML = '';
+        
+        if (this._faqs.length === 0) {
+            faqsList.innerHTML = '<p style="color: #6b7280; font-style: italic; padding: 20px; text-align: center;">No FAQs added yet. Click "Add FAQ" to add one.</p>';
+            return;
+        }
+        
+        this._faqs.forEach((faq, index) => {
+            const faqItem = document.createElement('div');
+            faqItem.className = 'dynamic-item';
+            faqItem.innerHTML = `
+                <div class="dynamic-item-header">
+                    <div class="dynamic-item-title">FAQ #${index + 1}</div>
+                    <button type="button" class="btn-remove" data-index="${index}">Remove</button>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Question</label>
+                    <input type="text" class="form-input faq-question" data-index="${index}" value="${faq.question || ''}" placeholder="What is the warranty period?">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Answer</label>
+                    <textarea class="form-textarea faq-answer" data-index="${index}" rows="3" placeholder="This product comes with a 2-year manufacturer warranty...">${faq.answer || ''}</textarea>
+                </div>
+            `;
+            
+            faqsList.appendChild(faqItem);
+            
+            // Add remove listener
+            faqItem.querySelector('.btn-remove').addEventListener('click', (e) => {
+                const idx = parseInt(e.target.dataset.index);
+                this._faqs.splice(idx, 1);
+                this._renderFaqs();
+            });
+            
+            // Add change listeners
+            faqItem.querySelector('.faq-question').addEventListener('input', (e) => {
+                this._faqs[index].question = e.target.value;
+            });
+            
+            faqItem.querySelector('.faq-answer').addEventListener('input', (e) => {
+                this._faqs[index].answer = e.target.value;
+            });
+        });
+    }
+    
+    _addFaq() {
+        this._faqs.push({
+            question: '',
+            answer: ''
+        });
+        this._renderFaqs();
+    }
+    
+    _collectFormData() {
+        const formBody = this._shadow.getElementById('formBody');
+        
+        // Collect all form values
+        const data = {
+            // Basic SEO
+            productName: formBody.querySelector('#productName')?.value.trim() || '',
+            description: formBody.querySelector('#description')?.value.trim() || '',
+            metaKeywords: formBody.querySelector('#metaKeywords')?.value.trim() || '',
+            canonicalUrl: formBody.querySelector('#canonicalUrl')?.value.trim() || '',
+            robotsContent: formBody.querySelector('#robotsContent')?.value || 'index, follow',
+            
+            // Product Schema
+            sku: formBody.querySelector('#sku')?.value.trim() || '',
+            mpn: formBody.querySelector('#mpn')?.value.trim() || '',
+            gtin: formBody.querySelector('#gtin')?.value.trim() || '',
+            isbn: formBody.querySelector('#isbn')?.value.trim() || '',
+            brandName: formBody.querySelector('#brandName')?.value.trim() || '',
+            
+            // Images
+            imageUrls: [],
+            
+            // Pricing
+            price: formBody.querySelector('#price')?.value.trim() || '',
+            priceCurrency: formBody.querySelector('#priceCurrency')?.value || 'USD',
+            priceValidUntil: formBody.querySelector('#priceValidUntil')?.value || '',
+            offerUrl: formBody.querySelector('#offerUrl')?.value.trim() || '',
+            availability: formBody.querySelector('#availability')?.value || '',
+            itemCondition: formBody.querySelector('#itemCondition')?.value || '',
+            
+            // Shipping
+            shippingCost: formBody.querySelector('#shippingCost')?.value.trim() || '',
+            shippingCurrency: formBody.querySelector('#shippingCurrency')?.value || 'USD',
+            shippingDestination: formBody.querySelector('#shippingDestination')?.value || '',
+            handlingTimeMin: formBody.querySelector('#handlingTimeMin')?.value.trim() || '',
+            handlingTimeMax: formBody.querySelector('#handlingTimeMax')?.value.trim() || '',
+            deliveryTimeMin: formBody.querySelector('#deliveryTimeMin')?.value.trim() || '',
+            deliveryTimeMax: formBody.querySelector('#deliveryTimeMax')?.value.trim() || '',
+            
+            // Returns
+            returnDays: formBody.querySelector('#returnDays')?.value.trim() || '',
+            returnCountry: formBody.querySelector('#returnCountry')?.value || '',
+            returnMethod: formBody.querySelector('#returnMethod')?.value || '',
+            returnFees: formBody.querySelector('#returnFees')?.value || '',
+            
+            // Reviews
+            aggregateRatingValue: formBody.querySelector('#aggregateRatingValue')?.value.trim() || '',
+            reviewCount: formBody.querySelector('#reviewCount')?.value.trim() || '',
+            bestRating: '5',
+            worstRating: '1',
+            
+            // Social
+            ogTitle: formBody.querySelector('#ogTitle')?.value.trim() || '',
+            ogDescription: formBody.querySelector('#ogDescription')?.value.trim() || '',
+            ogImage: formBody.querySelector('#ogImage')?.value.trim() || '',
+            twitterCard: formBody.querySelector('#twitterCard')?.value || 'summary_large_image',
+            
+            // Dynamic data
+            reviews: this._reviews,
+            faqs: this._faqs
+        };
+        
+        // Parse image URLs
+        const imageUrlsText = formBody.querySelector('#imageUrls')?.value.trim() || '';
+        if (imageUrlsText) {
+            data.imageUrls = imageUrlsText.split('\n').map(url => url.trim()).filter(url => url);
+        }
+        
+        return data;
+    }
+    
+    _validateForm() {
+        const formBody = this._shadow.getElementById('formBody');
+        
+        // Required fields
+        const productName = formBody.querySelector('#productName')?.value.trim();
+        if (!productName) {
+            alert('Please enter a product name');
+            return false;
+        }
+        
+        const description = formBody.querySelector('#description')?.value.trim();
+        if (!description) {
+            alert('Please enter a meta description');
+            return false;
+        }
+        
+        const price = formBody.querySelector('#price')?.value.trim();
+        if (!price) {
+            alert('Please enter a price');
+            return false;
+        }
+        
+        const priceCurrency = formBody.querySelector('#priceCurrency')?.value;
+        if (!priceCurrency) {
+            alert('Please select a currency');
+            return false;
+        }
+        
+        const availability = formBody.querySelector('#availability')?.value;
+        if (!availability) {
+            alert('Please select availability status');
+            return false;
         }
         
         return true;
     }
     
-    _collectCurrentStepData() {
-        if (this._currentStep === 1) {
-            this._formData.productName = this._shadow.getElementById('productName').value.trim();
-            this._formData.description = this._shadow.getElementById('description').value.trim();
-            this._formData.metaKeywords = this._shadow.getElementById('metaKeywords').value.trim();
-            this._formData.canonicalUrl = this._shadow.getElementById('canonicalUrl').value.trim();
-            this._formData.robotsContent = this._shadow.getElementById('robotsContent').value;
-        }
-        
-        if (this._currentStep === 2) {
-            this._formData.sku = this._shadow.getElementById('sku').value.trim();
-            this._formData.mpn = this._shadow.getElementById('mpn').value.trim();
-            this._formData.gtin = this._shadow.getElementById('gtin').value.trim();
-            this._formData.isbn = this._shadow.getElementById('isbn').value.trim();
-            this._formData.brandName = this._shadow.getElementById('brandName').value.trim();
-            
-            const imageUrlsText = this._shadow.getElementById('imageUrls').value.trim();
-            this._formData.imageUrls = imageUrlsText ? imageUrlsText.split('\n').map(url => url.trim()).filter(url => url) : [];
-        }
-        
-        if (this._currentStep === 3) {
-            this._formData.price = this._shadow.getElementById('price').value.trim();
-            this._formData.priceCurrency = this._shadow.getElementById('priceCurrency').value;
-            this._formData.priceValidUntil = this._shadow.getElementById('priceValidUntil').value;
-            this._formData.offerUrl = this._shadow.getElementById('offerUrl').value.trim();
-            this._formData.availability = this._shadow.getElementById('availability').value;
-            this._formData.itemCondition = this._shadow.getElementById('itemCondition').value;
-        }
-        
-        if (this._currentStep === 4) {
-            this._formData.shippingCost = this._shadow.getElementById('shippingCost').value.trim();
-            this._formData.shippingCurrency = this._shadow.getElementById('shippingCurrency').value;
-            this._formData.shippingDestination = this._shadow.getElementById('shippingDestination').value;
-            this._formData.handlingTimeMin = this._shadow.getElementById('handlingTimeMin').value.trim();
-            this._formData.handlingTimeMax = this._shadow.getElementById('handlingTimeMax').value.trim();
-            this._formData.deliveryTimeMin = this._shadow.getElementById('deliveryTimeMin').value.trim();
-            this._formData.deliveryTimeMax = this._shadow.getElementById('deliveryTimeMax').value.trim();
-            this._formData.returnDays = this._shadow.getElementById('returnDays').value.trim();
-            this._formData.returnCountry = this._shadow.getElementById('returnCountry').value;
-            this._formData.returnMethod = this._shadow.getElementById('returnMethod').value;
-            this._formData.returnFees = this._shadow.getElementById('returnFees').value;
-        }
-        
-        if (this._currentStep === 5) {
-            this._formData.aggregateRatingValue = this._shadow.getElementById('aggregateRatingValue').value.trim();
-            this._formData.reviewCount = this._shadow.getElementById('reviewCount').value.trim();
-            this._formData.bestRating = this._shadow.getElementById('bestRating').value.trim();
-            this._formData.worstRating = this._shadow.getElementById('worstRating').value.trim();
-        }
-        
-        if (this._currentStep === 6) {
-            this._formData.ogTitle = this._shadow.getElementById('ogTitle').value.trim();
-            this._formData.ogDescription = this._shadow.getElementById('ogDescription').value.trim();
-            this._formData.ogImage = this._shadow.getElementById('ogImage').value.trim();
-            this._formData.twitterCard = this._shadow.getElementById('twitterCard').value;
-        }
-    }
-    
     _handleSave() {
         console.log('🔷 Dashboard: Handling save');
         
-        // Collect final step data
-        this._collectCurrentStepData();
+        // Validate
+        if (!this._validateForm()) {
+            return;
+        }
         
-        // Add reviews and FAQs to form data
-        this._formData.reviews = this._reviews;
-        this._formData.faqs = this._faqs;
+        // Collect form data
+        const seoData = this._collectFormData();
+        
+        console.log('🔷 Dashboard: Collected SEO data:', seoData);
         
         const existingSEO = this._seoItems.find(item => 
             item.productId === this._selectedProduct.id || item.title === this._selectedProduct.name
@@ -2226,7 +1719,7 @@ _addFaq() {
         
         this._dispatchEvent('save-seo', {
             product: this._selectedProduct,
-            seoData: this._formData,
+            seoData: seoData,
             existingSEO: existingSEO
         });
     }
@@ -2248,7 +1741,6 @@ _addFaq() {
         this._showingForm = false;
         this._selectedProduct = null;
         this._editMode = false;
-        this._currentStep = 1;
         this._formData = {};
         this._reviews = [];
         this._faqs = [];
