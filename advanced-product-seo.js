@@ -2343,3 +2343,485 @@ _renderReviews() {
         });
         this._renderShippingConditions();
     }
+_collectFormData() {
+        const formBody = this._shadow.getElementById('formBody');
+        
+        // Collect all form values
+        const data = {
+            // Basic SEO
+            productName: formBody.querySelector('#productName')?.value.trim() || '',
+            description: formBody.querySelector('#description')?.value.trim() || '',
+            metaKeywords: formBody.querySelector('#metaKeywords')?.value.trim() || '',
+            canonicalUrl: formBody.querySelector('#canonicalUrl')?.value.trim() || '',
+            robotsContent: formBody.querySelector('#robotsContent')?.value || 'index, follow',
+            
+            // Product Schema
+            sku: formBody.querySelector('#sku')?.value.trim() || '',
+            mpn: formBody.querySelector('#mpn')?.value.trim() || '',
+            gtin: formBody.querySelector('#gtin')?.value.trim() || '',
+            isbn: formBody.querySelector('#isbn')?.value.trim() || '',
+            brandName: formBody.querySelector('#brandName')?.value.trim() || '',
+            
+            // Images
+            imageUrls: [],
+            
+            // Pricing
+            price: formBody.querySelector('#price')?.value.trim() || '',
+            priceCurrency: formBody.querySelector('#priceCurrency')?.value || 'USD',
+            priceValidUntil: formBody.querySelector('#priceValidUntil')?.value || '',
+            offerUrl: formBody.querySelector('#offerUrl')?.value.trim() || '',
+            availability: formBody.querySelector('#availability')?.value || '',
+            itemCondition: formBody.querySelector('#itemCondition')?.value || '',
+            
+            // Sale Pricing
+            strikethroughPrice: formBody.querySelector('#strikethroughPrice')?.value.trim() || '',
+            
+            // Unit Pricing
+            unitPricingValue: formBody.querySelector('#unitPricingValue')?.value.trim() || '',
+            unitPricingUnit: formBody.querySelector('#unitPricingUnit')?.value || '',
+            unitPricingBaseValue: formBody.querySelector('#unitPricingBaseValue')?.value.trim() || '',
+            unitPricingBaseUnit: formBody.querySelector('#unitPricingBaseUnit')?.value || '',
+            
+            // Member/Loyalty Pricing
+            memberPrice: formBody.querySelector('#memberPrice')?.value.trim() || '',
+            memberProgramName: formBody.querySelector('#memberProgramName')?.value.trim() || '',
+            memberProgramUrl: formBody.querySelector('#memberProgramUrl')?.value.trim() || '',
+            memberTierName: formBody.querySelector('#memberTierName')?.value.trim() || '',
+            memberPointsEarned: formBody.querySelector('#memberPointsEarned')?.value.trim() || '',
+            
+            // Product Group (Variants)
+            isProductGroup: formBody.querySelector('#isProductGroup')?.checked || false,
+            productGroupID: formBody.querySelector('#productGroupID')?.value.trim() || '',
+            variesBySize: formBody.querySelector('#variesBySize')?.checked || false,
+            variesByColor: formBody.querySelector('#variesByColor')?.checked || false,
+            variesByMaterial: formBody.querySelector('#variesByMaterial')?.checked || false,
+            variesByPattern: formBody.querySelector('#variesByPattern')?.checked || false,
+            
+            // Shipping
+            shippingCost: formBody.querySelector('#shippingCost')?.value.trim() || '',
+            shippingCurrency: formBody.querySelector('#shippingCurrency')?.value || 'USD',
+            shippingDestination: formBody.querySelector('#shippingDestination')?.value || '',
+            handlingTimeMin: formBody.querySelector('#handlingTimeMin')?.value.trim() || '',
+            handlingTimeMax: formBody.querySelector('#handlingTimeMax')?.value.trim() || '',
+            deliveryTimeMin: formBody.querySelector('#deliveryTimeMin')?.value.trim() || '',
+            deliveryTimeMax: formBody.querySelector('#deliveryTimeMax')?.value.trim() || '',
+            
+            // Returns
+            returnDays: formBody.querySelector('#returnDays')?.value.trim() || '',
+            returnCountry: formBody.querySelector('#returnCountry')?.value || '',
+            returnMethod: formBody.querySelector('#returnMethod')?.value || '',
+            returnFees: formBody.querySelector('#returnFees')?.value || '',
+            returnShippingFees: formBody.querySelector('#returnShippingFees')?.value.trim() || '',
+            customerRemorseReturnFees: formBody.querySelector('#customerRemorseReturnFees')?.value || '',
+            itemDefectReturnFees: formBody.querySelector('#itemDefectReturnFees')?.value || '',
+            returnLabelSource: formBody.querySelector('#returnLabelSource')?.value || '',
+            
+            // Reviews
+            aggregateRatingValue: formBody.querySelector('#aggregateRatingValue')?.value.trim() || '',
+            reviewCount: formBody.querySelector('#reviewCount')?.value.trim() || '',
+            bestRating: '5',
+            worstRating: '1',
+            
+            // Certifications
+            certificationName: formBody.querySelector('#certificationName')?.value.trim() || '',
+            certificationIssuer: formBody.querySelector('#certificationIssuer')?.value.trim() || '',
+            certificationRating: formBody.querySelector('#certificationRating')?.value.trim() || '',
+            certificationId: formBody.querySelector('#certificationId')?.value.trim() || '',
+            
+            // 3D Model
+            model3dUrl: formBody.querySelector('#model3dUrl')?.value.trim() || '',
+            
+            // Social
+            ogTitle: formBody.querySelector('#ogTitle')?.value.trim() || '',
+            ogDescription: formBody.querySelector('#ogDescription')?.value.trim() || '',
+            ogImage: formBody.querySelector('#ogImage')?.value.trim() || '',
+            twitterCard: formBody.querySelector('#twitterCard')?.value || 'summary_large_image',
+            
+            // Dynamic data
+            reviews: this._reviews,
+            faqs: this._faqs,
+            variants: this._variants,
+            certifications: this._certifications,
+            shippingConditions: this._shippingConditions
+        };
+        
+        // Parse image URLs
+        const imageUrlsText = formBody.querySelector('#imageUrls')?.value.trim() || '';
+        if (imageUrlsText) {
+            data.imageUrls = imageUrlsText.split('\n').map(url => url.trim()).filter(url => url);
+        }
+        
+        return data;
+    }
+    
+    _validateForm() {
+        const formBody = this._shadow.getElementById('formBody');
+        
+        // Required fields
+        const productName = formBody.querySelector('#productName')?.value.trim();
+        if (!productName) {
+            alert('❌ Please enter a product name');
+            return false;
+        }
+        
+        const description = formBody.querySelector('#description')?.value.trim();
+        if (!description) {
+            alert('❌ Please enter a meta description');
+            return false;
+        }
+        
+        const price = formBody.querySelector('#price')?.value.trim();
+        if (!price) {
+            alert('❌ Please enter a price');
+            return false;
+        }
+        
+        const priceCurrency = formBody.querySelector('#priceCurrency')?.value;
+        if (!priceCurrency) {
+            alert('❌ Please select a currency');
+            return false;
+        }
+        
+        const availability = formBody.querySelector('#availability')?.value;
+        if (!availability) {
+            alert('❌ Please select availability status');
+            return false;
+        }
+        
+        // Validate product group if enabled
+        const isProductGroup = formBody.querySelector('#isProductGroup')?.checked;
+        if (isProductGroup) {
+            const productGroupID = formBody.querySelector('#productGroupID')?.value.trim();
+            if (!productGroupID) {
+                alert('❌ Please enter a Product Group ID when variants are enabled');
+                return false;
+            }
+            
+            const hasVariationType = formBody.querySelector('#variesBySize')?.checked ||
+                                   formBody.querySelector('#variesByColor')?.checked ||
+                                   formBody.querySelector('#variesByMaterial')?.checked ||
+                                   formBody.querySelector('#variesByPattern')?.checked;
+            
+            if (!hasVariationType) {
+                alert('❌ Please select at least one variant type (Size, Color, Material, or Pattern)');
+                return false;
+            }
+        }
+        
+        // Validate unit pricing (all or none)
+        const unitPricingValue = formBody.querySelector('#unitPricingValue')?.value.trim();
+        const unitPricingUnit = formBody.querySelector('#unitPricingUnit')?.value;
+        const unitPricingBaseValue = formBody.querySelector('#unitPricingBaseValue')?.value.trim();
+        const unitPricingBaseUnit = formBody.querySelector('#unitPricingBaseUnit')?.value;
+        
+        if (unitPricingValue || unitPricingUnit || unitPricingBaseValue || unitPricingBaseUnit) {
+            if (!unitPricingValue || !unitPricingUnit || !unitPricingBaseValue || !unitPricingBaseUnit) {
+                alert('❌ Unit pricing requires all fields: Product Quantity Value, Product Quantity Unit, Base Unit Value, and Base Unit');
+                return false;
+            }
+        }
+        
+        // Validate member pricing
+        const memberPrice = formBody.querySelector('#memberPrice')?.value.trim();
+        if (memberPrice) {
+            const memberProgramName = formBody.querySelector('#memberProgramName')?.value.trim();
+            if (!memberProgramName) {
+                alert('❌ Member pricing requires a Membership Program Name');
+                return false;
+            }
+        }
+        
+        return true;
+    }
+    
+    _handleSave() {
+        console.log('🔷 Dashboard: Handling save');
+        
+        // Validate
+        if (!this._validateForm()) {
+            return;
+        }
+        
+        // Collect form data
+        const seoData = this._collectFormData();
+        
+        console.log('🔷 Dashboard: Collected SEO data:', seoData);
+        
+        const existingSEO = this._seoItems.find(item => 
+            item.productId === this._selectedProduct.id || item.title === this._selectedProduct.name
+        );
+        
+        this._dispatchEvent('save-seo', {
+            product: this._selectedProduct,
+            seoData: seoData,
+            existingSEO: existingSEO
+        });
+    }
+    
+    _deleteSEO(product, seoData) {
+        if (!confirm(`Delete SEO data for "${product.name}"?`)) {
+            return;
+        }
+        
+        this._dispatchEvent('delete-seo', {
+            product: product,
+            seoData: seoData
+        });
+    }
+    
+    _hideForm() {
+        console.log('🔷 Dashboard: Hiding form');
+        
+        this._showingForm = false;
+        this._selectedProduct = null;
+        this._editMode = false;
+        this._formData = {};
+        this._reviews = [];
+        this._faqs = [];
+        this._variants = [];
+        this._certifications = [];
+        this._shippingConditions = [];
+        
+        const productsView = this._shadow.getElementById('productsView');
+        const formView = this._shadow.getElementById('formView');
+        
+        formView.classList.remove('active');
+        productsView.classList.add('active');
+    }
+    
+    _updateStats() {
+        this._shadow.getElementById('totalProducts').textContent = this._totalProducts;
+        
+        const seoConfigured = this._seoItems.length;
+        const needsSetup = this._totalProducts - seoConfigured;
+        
+        this._shadow.getElementById('seoConfigured').textContent = seoConfigured;
+        this._shadow.getElementById('needsSetup').textContent = needsSetup;
+    }
+    
+    _updatePagination() {
+        const pagination = this._shadow.getElementById('pagination');
+        const prevBtn = this._shadow.getElementById('prevPage');
+        const nextBtn = this._shadow.getElementById('nextPage');
+        const info = this._shadow.getElementById('paginationInfo');
+        
+        const totalPages = Math.ceil(this._totalProducts / this._pageSize);
+        
+        if (totalPages > 1) {
+            pagination.style.display = 'flex';
+            prevBtn.disabled = this._currentPage === 0;
+            nextBtn.disabled = this._currentPage >= totalPages - 1;
+            
+            const start = this._currentPage * this._pageSize + 1;
+            const end = Math.min((this._currentPage + 1) * this._pageSize, this._totalProducts);
+            info.textContent = `${start}-${end} of ${this._totalProducts}`;
+        } else {
+            pagination.style.display = 'none';
+        }
+    }
+    
+    _showToast(type, message) {
+        const toast = this._shadow.getElementById('toastNotification');
+        const toastMessage = this._shadow.getElementById('toastMessage');
+        
+        toastMessage.textContent = message;
+        toast.className = `toast-notification toast-${type} show`;
+        
+        setTimeout(() => {
+            toast.classList.remove('show');
+        }, 5000);
+    }
+    
+    _getAllCurrencies() {
+        const currencies = [
+            { code: 'USD', name: 'US Dollar' },
+            { code: 'EUR', name: 'Euro' },
+            { code: 'GBP', name: 'British Pound' },
+            { code: 'INR', name: 'Indian Rupee' },
+            { code: 'AUD', name: 'Australian Dollar' },
+            { code: 'CAD', name: 'Canadian Dollar' },
+            { code: 'JPY', name: 'Japanese Yen' },
+            { code: 'CNY', name: 'Chinese Yuan' },
+            { code: 'CHF', name: 'Swiss Franc' },
+            { code: 'SEK', name: 'Swedish Krona' },
+            { code: 'NZD', name: 'New Zealand Dollar' },
+            { code: 'MXN', name: 'Mexican Peso' },
+            { code: 'SGD', name: 'Singapore Dollar' },
+            { code: 'HKD', name: 'Hong Kong Dollar' },
+            { code: 'NOK', name: 'Norwegian Krone' },
+            { code: 'TRY', name: 'Turkish Lira' },
+            { code: 'RUB', name: 'Russian Ruble' },
+            { code: 'BRL', name: 'Brazilian Real' },
+            { code: 'ZAR', name: 'South African Rand' },
+            { code: 'DKK', name: 'Danish Krone' },
+            { code: 'PLN', name: 'Polish Zloty' },
+            { code: 'THB', name: 'Thai Baht' },
+            { code: 'MYR', name: 'Malaysian Ringgit' },
+            { code: 'IDR', name: 'Indonesian Rupiah' },
+            { code: 'HUF', name: 'Hungarian Forint' },
+            { code: 'CZK', name: 'Czech Koruna' },
+            { code: 'ILS', name: 'Israeli Shekel' },
+            { code: 'CLP', name: 'Chilean Peso' },
+            { code: 'PHP', name: 'Philippine Peso' },
+            { code: 'AED', name: 'UAE Dirham' },
+            { code: 'SAR', name: 'Saudi Riyal' },
+            { code: 'ARS', name: 'Argentine Peso' },
+            { code: 'EGP', name: 'Egyptian Pound' },
+            { code: 'PKR', name: 'Pakistani Rupee' },
+            { code: 'BDT', name: 'Bangladeshi Taka' },
+            { code: 'VND', name: 'Vietnamese Dong' },
+            { code: 'NGN', name: 'Nigerian Naira' },
+            { code: 'UAH', name: 'Ukrainian Hryvnia' },
+            { code: 'PEN', name: 'Peruvian Sol' },
+            { code: 'COP', name: 'Colombian Peso' },
+            { code: 'MAD', name: 'Moroccan Dirham' },
+            { code: 'RON', name: 'Romanian Leu' },
+            { code: 'KES', name: 'Kenyan Shilling' },
+            { code: 'LKR', name: 'Sri Lankan Rupee' },
+            { code: 'QAR', name: 'Qatari Riyal' },
+            { code: 'KWD', name: 'Kuwaiti Dinar' },
+            { code: 'OMR', name: 'Omani Rial' },
+            { code: 'BHD', name: 'Bahraini Dinar' },
+            { code: 'JOD', name: 'Jordanian Dinar' },
+            { code: 'KRW', name: 'South Korean Won' },
+            { code: 'TWD', name: 'Taiwan Dollar' },
+            { code: 'BGN', name: 'Bulgarian Lev' },
+            { code: 'HRK', name: 'Croatian Kuna' },
+            { code: 'ISK', name: 'Icelandic Krona' },
+            { code: 'MOP', name: 'Macanese Pataca' },
+            { code: 'MMK', name: 'Myanmar Kyat' },
+            { code: 'NPR', name: 'Nepalese Rupee' },
+            { code: 'RSD', name: 'Serbian Dinar' },
+            { code: 'LBP', name: 'Lebanese Pound' },
+            { code: 'GEL', name: 'Georgian Lari' },
+            { code: 'TND', name: 'Tunisian Dinar' },
+            { code: 'UYU', name: 'Uruguayan Peso' },
+            { code: 'CRC', name: 'Costa Rican Colón' },
+            { code: 'DOP', name: 'Dominican Peso' },
+            { code: 'GTQ', name: 'Guatemalan Quetzal' },
+            { code: 'HNL', name: 'Honduran Lempira' },
+            { code: 'JMD', name: 'Jamaican Dollar' },
+            { code: 'NIO', name: 'Nicaraguan Córdoba' },
+            { code: 'PAB', name: 'Panamanian Balboa' },
+            { code: 'PYG', name: 'Paraguayan Guaraní' },
+            { code: 'BOB', name: 'Bolivian Boliviano' },
+            { code: 'VES', name: 'Venezuelan Bolívar' },
+            { code: 'GHS', name: 'Ghanaian Cedi' },
+            { code: 'UGX', name: 'Ugandan Shilling' },
+            { code: 'TZS', name: 'Tanzanian Shilling' },
+            { code: 'ETB', name: 'Ethiopian Birr' },
+            { code: 'ZMW', name: 'Zambian Kwacha' },
+            { code: 'BWP', name: 'Botswana Pula' },
+            { code: 'MUR', name: 'Mauritian Rupee' },
+            { code: 'NAD', name: 'Namibian Dollar' },
+            { code: 'TTD', name: 'Trinidad and Tobago Dollar' },
+            { code: 'BBD', name: 'Barbadian Dollar' },
+            { code: 'BZD', name: 'Belize Dollar' },
+            { code: 'FJD', name: 'Fijian Dollar' },
+            { code: 'BSD', name: 'Bahamian Dollar' },
+            { code: 'XCD', name: 'East Caribbean Dollar' },
+            { code: 'KYD', name: 'Cayman Islands Dollar' },
+            { code: 'BND', name: 'Brunei Dollar' },
+            { code: 'LAK', name: 'Lao Kip' },
+            { code: 'KHR', name: 'Cambodian Riel' },
+            { code: 'MVR', name: 'Maldivian Rufiyaa' },
+            { code: 'AFN', name: 'Afghan Afghani' },
+            { code: 'AMD', name: 'Armenian Dram' },
+            { code: 'AZN', name: 'Azerbaijani Manat' },
+            { code: 'KZT', name: 'Kazakhstani Tenge' },
+            { code: 'KGS', name: 'Kyrgyzstani Som' },
+            { code: 'TJS', name: 'Tajikistani Somoni' },
+            { code: 'TMT', name: 'Turkmenistan Manat' },
+            { code: 'UZS', name: 'Uzbekistani Som' },
+            { code: 'BDT', name: 'Bangladeshi Taka' },
+            { code: 'BTN', name: 'Bhutanese Ngultrum' },
+            { code: 'MNT', name: 'Mongolian Tögrög' },
+            { code: 'ALL', name: 'Albanian Lek' },
+            { code: 'BAM', name: 'Bosnia-Herzegovina Convertible Mark' },
+            { code: 'MKD', name: 'Macedonian Denar' },
+            { code: 'MDL', name: 'Moldovan Leu' },
+            { code: 'BYN', name: 'Belarusian Ruble' }
+        ];
+        
+        return currencies.map(c => `<option value="${c.code}">${c.code} - ${c.name}</option>`).join('');
+    }
+    
+    _getAllCountries() {
+        const countries = [
+            { code: '', name: '-- Select Country --' },
+            { code: 'US', name: 'United States' },
+            { code: 'GB', name: 'United Kingdom' },
+            { code: 'CA', name: 'Canada' },
+            { code: 'AU', name: 'Australia' },
+            { code: 'DE', name: 'Germany' },
+            { code: 'FR', name: 'France' },
+            { code: 'IT', name: 'Italy' },
+            { code: 'ES', name: 'Spain' },
+            { code: 'NL', name: 'Netherlands' },
+            { code: 'BE', name: 'Belgium' },
+            { code: 'CH', name: 'Switzerland' },
+            { code: 'AT', name: 'Austria' },
+            { code: 'SE', name: 'Sweden' },
+            { code: 'NO', name: 'Norway' },
+            { code: 'DK', name: 'Denmark' },
+            { code: 'FI', name: 'Finland' },
+            { code: 'IE', name: 'Ireland' },
+            { code: 'NZ', name: 'New Zealand' },
+            { code: 'SG', name: 'Singapore' },
+            { code: 'HK', name: 'Hong Kong' },
+            { code: 'JP', name: 'Japan' },
+            { code: 'CN', name: 'China' },
+            { code: 'IN', name: 'India' },
+            { code: 'BR', name: 'Brazil' },
+            { code: 'MX', name: 'Mexico' },
+            { code: 'AR', name: 'Argentina' },
+            { code: 'CL', name: 'Chile' },
+            { code: 'CO', name: 'Colombia' },
+            { code: 'PE', name: 'Peru' },
+            { code: 'ZA', name: 'South Africa' },
+            { code: 'AE', name: 'United Arab Emirates' },
+            { code: 'SA', name: 'Saudi Arabia' },
+            { code: 'TR', name: 'Turkey' },
+            { code: 'RU', name: 'Russia' },
+            { code: 'PL', name: 'Poland' },
+            { code: 'CZ', name: 'Czech Republic' },
+            { code: 'HU', name: 'Hungary' },
+            { code: 'RO', name: 'Romania' },
+            { code: 'TH', name: 'Thailand' },
+            { code: 'MY', name: 'Malaysia' },
+            { code: 'ID', name: 'Indonesia' },
+            { code: 'PH', name: 'Philippines' },
+            { code: 'VN', name: 'Vietnam' },
+            { code: 'KR', name: 'South Korea' },
+            { code: 'TW', name: 'Taiwan' },
+            { code: 'IL', name: 'Israel' },
+            { code: 'EG', name: 'Egypt' },
+            { code: 'NG', name: 'Nigeria' },
+            { code: 'KE', name: 'Kenya' },
+            { code: 'PK', name: 'Pakistan' },
+            { code: 'BD', name: 'Bangladesh' },
+            { code: 'LK', name: 'Sri Lanka' },
+            { code: 'UA', name: 'Ukraine' },
+            { code: 'MA', name: 'Morocco' },
+            { code: 'PT', name: 'Portugal' },
+            { code: 'GR', name: 'Greece' },
+            { code: 'BG', name: 'Bulgaria' },
+            { code: 'HR', name: 'Croatia' },
+            { code: 'RS', name: 'Serbia' },
+            { code: 'SI', name: 'Slovenia' },
+            { code: 'SK', name: 'Slovakia' },
+            { code: 'LT', name: 'Lithuania' },
+            { code: 'LV', name: 'Latvia' },
+            { code: 'EE', name: 'Estonia' },
+            { code: 'IS', name: 'Iceland' },
+            { code: 'LU', name: 'Luxembourg' },
+            { code: 'MT', name: 'Malta' },
+            { code: 'CY', name: 'Cyprus' }
+        ];
+        
+        return countries.map(c => `<option value="${c.code}">${c.name}</option>`).join('');
+    }
+}
+
+customElements.define('product-seo-dashboard', ProductSEODashboard);
+console.log('🔷 Dashboard: ✅ Custom element registered with ALL Google-supported fields');
