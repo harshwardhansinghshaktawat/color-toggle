@@ -424,6 +424,12 @@ class Product360Dashboard extends HTMLElement {
                         </div>
                         
                         <div id="productsGrid" class="grid"></div>
+                        
+                        <div style="display: flex; justify-content: center; gap: 16px; margin-top: 32px; align-items: center;" id="pagination">
+                            <button class="btn btn-primary" id="prevBtn" disabled style="width: auto; padding: 12px 24px;">← Previous</button>
+                            <span id="pageInfo" style="font-weight: 600; color: #374151;">Page 1</span>
+                            <button class="btn btn-primary" id="nextBtn" style="width: auto; padding: 12px 24px;">Next →</button>
+                        </div>
                     </div>
                 </div>
             </div>
@@ -502,6 +508,19 @@ class Product360Dashboard extends HTMLElement {
         // Process & upload
         this._shadow.getElementById('processBtn').addEventListener('click', () => this._processVideo());
         this._shadow.getElementById('uploadBtn').addEventListener('click', () => this._uploadFrames());
+        
+        // Pagination
+        this._shadow.getElementById('prevBtn').addEventListener('click', () => {
+            if (this._currentPage > 0) {
+                this._currentPage--;
+                this._loadProducts();
+            }
+        });
+        
+        this._shadow.getElementById('nextBtn').addEventListener('click', () => {
+            this._currentPage++;
+            this._loadProducts();
+        });
     }
     
     _dispatchEvent(name, detail) {
@@ -526,6 +545,20 @@ class Product360Dashboard extends HTMLElement {
         this._shadow.getElementById('loading').classList.add('hide');
         this._renderProducts();
         this._updateStats();
+        this._updatePagination(data.hasMore);
+    }
+    
+    _updatePagination(hasMore) {
+        const prevBtn = this._shadow.getElementById('prevBtn');
+        const nextBtn = this._shadow.getElementById('nextBtn');
+        const pageInfo = this._shadow.getElementById('pageInfo');
+        
+        prevBtn.disabled = this._currentPage === 0;
+        nextBtn.disabled = !hasMore;
+        
+        const currentPageNum = this._currentPage + 1;
+        const totalPages = Math.ceil(this._totalProducts / this._pageSize);
+        pageInfo.textContent = `Page ${currentPageNum} of ${totalPages}`;
     }
     
     _renderProducts() {
@@ -567,18 +600,47 @@ class Product360Dashboard extends HTMLElement {
     }
     
     _showModal(product) {
+        console.log('🎥 Dashboard: Opening modal for product:', product.name);
+        
         this._selectedProduct = product;
         this._videoFile = null;
         this._extractedFrames = [];
         
-        this._shadow.getElementById('modalTitle').textContent = 'Add 360° View';
+        // Reset modal state
+        const uploadSection = this._shadow.getElementById('uploadSection');
+        const progressSection = this._shadow.getElementById('progressSection');
+        const processBtn = this._shadow.getElementById('processBtn');
+        const uploadBtn = this._shadow.getElementById('uploadBtn');
+        const previewGrid = this._shadow.getElementById('previewGrid');
+        
+        // Show upload section, hide progress
+        uploadSection.style.display = 'block';
+        progressSection.classList.remove('active');
+        progressSection.style.display = 'none';
+        
+        // Reset buttons
+        processBtn.style.display = 'inline-block';
+        processBtn.disabled = true;
+        uploadBtn.style.display = 'none';
+        uploadBtn.disabled = false;
+        uploadBtn.textContent = 'Upload';
+        
+        // Clear preview
+        previewGrid.innerHTML = '';
+        previewGrid.style.display = 'none';
+        
+        // Reset form
+        this._shadow.getElementById('modalTitle').textContent = 'Add 360° View - ' + product.name;
         this._shadow.getElementById('videoInput').value = '';
         this._shadow.getElementById('fileInfo').classList.remove('active');
-        this._shadow.getElementById('processBtn').disabled = true;
-        this._shadow.getElementById('uploadBtn').style.display = 'none';
-        this._shadow.getElementById('progressSection').classList.remove('active');
+        this._shadow.getElementById('fileInfo').innerHTML = '';
+        this._shadow.getElementById('frameCount').value = '36';
+        this._shadow.getElementById('quality').value = '0.85';
         
+        // Show modal
         this._shadow.getElementById('modal').classList.add('active');
+        
+        console.log('🎥 Dashboard: Modal opened and reset');
     }
     
     _hideModal() {
@@ -677,33 +739,85 @@ class Product360Dashboard extends HTMLElement {
     }
     
     async _uploadFrames() {
-        if (!this._selectedProduct || this._extractedFrames.length === 0) return;
+        console.log('🎥 Dashboard: ═══════════════════════════════════════');
+        console.log('🎥 Dashboard: _uploadFrames called');
+        console.log('🎥 Dashboard: Selected product:', this._selectedProduct);
+        console.log('🎥 Dashboard: Extracted frames count:', this._extractedFrames.length);
+        
+        if (!this._selectedProduct || this._extractedFrames.length === 0) {
+            console.error('🎥 Dashboard: Missing data - product or frames');
+            return;
+        }
         
         const uploadBtn = this._shadow.getElementById('uploadBtn');
         uploadBtn.disabled = true;
         uploadBtn.textContent = 'Uploading...';
         
-        const framesData = await Promise.all(
-            this._extractedFrames.map(async (frame, index) => {
-                const reader = new FileReader();
-                return new Promise((resolve) => {
-                    reader.onloadend = () => {
-                        resolve({
-                            data: reader.result.split(',')[1],
-                            index: index,
-                            filename: `frame-${String(index + 1).padStart(3, '0')}.webp`
-                        });
-                    };
-                    reader.readAsDataURL(frame.blob);
-                });
-            })
-        );
+        this._updateProgress(0, 'Preparing frames for upload...');
         
-        this._dispatchEvent('upload-frames', {
-            frames: framesData,
-            productId: this._selectedProduct.id,
-            productName: this._selectedProduct.name
-        });
+        try {
+            console.log('🎥 Dashboard: Converting frames to base64...');
+            
+            const framesData = await Promise.all(
+                this._extractedFrames.map(async (frame, index) => {
+                    console.log('🎥 Dashboard: Converting frame', index + 1);
+                    
+                    const reader = new FileReader();
+                    return new Promise((resolve) => {
+                        reader.onloadend = () => {
+                            const base64Data = reader.result.split(',')[1];
+                            console.log('🎥 Dashboard: Frame', index + 1, 'converted. Size:', base64Data.length, 'chars');
+                            
+                            resolve({
+                                data: base64Data,
+                                index: index,
+                                filename: `frame-${String(index + 1).padStart(3, '0')}.webp`
+                            });
+                        };
+                        reader.onerror = (error) => {
+                            console.error('🎥 Dashboard: Error reading frame', index + 1, ':', error);
+                            resolve(null);
+                        };
+                        reader.readAsDataURL(frame.blob);
+                    });
+                })
+            );
+            
+            // Filter out any failed conversions
+            const validFrames = framesData.filter(f => f !== null);
+            console.log('🎥 Dashboard: Valid frames ready:', validFrames.length);
+            
+            if (validFrames.length === 0) {
+                throw new Error('No valid frames to upload');
+            }
+            
+            this._updateProgress(10, 'Sending to backend...');
+            
+            console.log('🎥 Dashboard: Dispatching upload-frames event');
+            console.log('🎥 Dashboard: Product ID:', this._selectedProduct.id);
+            console.log('🎥 Dashboard: Product Name:', this._selectedProduct.name);
+            console.log('🎥 Dashboard: Frames to upload:', validFrames.length);
+            
+            this._dispatchEvent('upload-frames', {
+                frames: validFrames,
+                productId: this._selectedProduct.id,
+                productName: this._selectedProduct.name
+            });
+            
+            console.log('🎥 Dashboard: Event dispatched successfully');
+            console.log('🎥 Dashboard: ═══════════════════════════════════════');
+            
+        } catch (error) {
+            console.error('🎥 Dashboard: ═══════════════════════════════════════');
+            console.error('🎥 Dashboard: Upload preparation error:', error);
+            console.error('🎥 Dashboard: Error message:', error.message);
+            console.error('🎥 Dashboard: Error stack:', error.stack);
+            console.error('🎥 Dashboard: ═══════════════════════════════════════');
+            
+            this._showToast('error', 'Failed to prepare upload: ' + error.message);
+            uploadBtn.disabled = false;
+            uploadBtn.textContent = 'Upload';
+        }
     }
     
     _updateProgress(percent, label) {
