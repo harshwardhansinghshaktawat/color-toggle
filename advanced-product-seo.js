@@ -994,127 +994,189 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _showForm(product, seoData, isEdit) {
-        console.log('🔷 Dashboard: Showing form for:', product.name);
-        
-        this._selectedProduct = product;
-        this._editMode = isEdit;
-        this._showingForm = true;
-        this._currentStep = 1;
-        this._reviews = [];
-        this._faqs = [];
-        
-        const formTitle = this._shadow.getElementById('formTitle');
-        formTitle.textContent = isEdit ? 'Edit Product SEO' : 'Setup Product SEO';
-        
-        // Initialize form data
-        this._formData = {
-            // Step 1: Basic SEO
-            productName: product.name,
-            description: '',
-            metaKeywords: '',
-            canonicalUrl: '',
-            
-            // Step 2: Product Schema
-            sku: '',
-            mpn: '',
-            gtin: '',
-            isbn: '',
-            brandName: '',
-            imageUrls: [],
-            
-            // Step 3: Pricing & Offers
-            price: '',
-            priceCurrency: 'USD',
-            priceValidUntil: '',
-            availability: '',
-            itemCondition: '',
-            offerUrl: '',
-            
-            // Step 4: Merchant Listing
-            shippingCost: '',
-            shippingCurrency: 'USD',
-            shippingDestination: '',
-            handlingTimeMin: '',
-            handlingTimeMax: '',
-            deliveryTimeMin: '',
-            deliveryTimeMax: '',
-            returnDays: '',
-            returnCountry: '',
-            returnMethod: '',
-            returnFees: '',
-            
-            // Step 5: Reviews & Ratings
-            aggregateRatingValue: '',
-            reviewCount: '',
-            bestRating: '5',
-            worstRating: '1',
-            
-            // Step 6: Advanced
-            ogTitle: '',
-            ogDescription: '',
-            ogImage: '',
-            twitterCard: 'summary_large_image',
-            robotsContent: 'index, follow'
-        };
-        
-        // Populate from existing data
-        if (seoData && seoData.seoData) {
-            try {
-                const data = typeof seoData.seoData === 'string' 
-                    ? JSON.parse(seoData.seoData) 
-                    : seoData.seoData;
-                
-                Object.assign(this._formData, data);
-                
-                if (data.reviews) this._reviews = data.reviews;
-                if (data.faqs) this._faqs = data.faqs;
-            } catch (e) {
-                console.error('Error parsing SEO data:', e);
-            }
-        }
-        
-        // Render all form steps
-        this._renderFormSteps();
-        
-        // Show form view
-        const productsView = this._shadow.getElementById('productsView');
-        const formView = this._shadow.getElementById('formView');
-        
-        productsView.classList.remove('active');
-        formView.classList.add('active');
-        
-        // Show first step
-        this._updateStepDisplay();
-    }
+    console.log('🔷 Dashboard: Showing form for:', product.name);
+    console.log('🔷 Dashboard: isEdit:', isEdit);
     
-    _renderFormSteps() {
-        const formBody = this._shadow.getElementById('formBody');
-        formBody.innerHTML = '';
-        
+    this._selectedProduct = product;
+    this._editMode = isEdit;
+    this._showingForm = true;
+    this._currentStep = 1;
+    this._reviews = [];
+    this._faqs = [];
+    
+    const formTitle = this._shadow.getElementById('formTitle');
+    formTitle.textContent = isEdit ? 'Edit Product SEO' : 'Setup Product SEO';
+    
+    console.log('🔷 Dashboard: Initializing form data...');
+    
+    // Initialize form data
+    this._formData = {
         // Step 1: Basic SEO
-        const step1 = this._createStep1();
-        formBody.appendChild(step1);
+        productName: product.name,
+        description: '',
+        metaKeywords: '',
+        canonicalUrl: '',
         
         // Step 2: Product Schema
-        const step2 = this._createStep2();
-        formBody.appendChild(step2);
+        sku: '',
+        mpn: '',
+        gtin: '',
+        isbn: '',
+        brandName: '',
+        imageUrls: [],
         
         // Step 3: Pricing & Offers
-        const step3 = this._createStep3();
-        formBody.appendChild(step3);
+        price: '',
+        priceCurrency: 'USD',
+        priceValidUntil: '',
+        availability: '',
+        itemCondition: '',
+        offerUrl: '',
         
         // Step 4: Merchant Listing
-        const step4 = this._createStep4();
-        formBody.appendChild(step4);
+        shippingCost: '',
+        shippingCurrency: 'USD',
+        shippingDestination: '',
+        handlingTimeMin: '',
+        handlingTimeMax: '',
+        deliveryTimeMin: '',
+        deliveryTimeMax: '',
+        returnDays: '',
+        returnCountry: '',
+        returnMethod: '',
+        returnFees: '',
         
         // Step 5: Reviews & Ratings
+        aggregateRatingValue: '',
+        reviewCount: '',
+        bestRating: '5',
+        worstRating: '1',
+        
+        // Step 6: Advanced
+        ogTitle: '',
+        ogDescription: '',
+        ogImage: '',
+        twitterCard: 'summary_large_image',
+        robotsContent: 'index, follow'
+    };
+    
+    console.log('🔷 Dashboard: Checking for existing SEO data...');
+    
+    // Populate from existing data
+    if (seoData && seoData.seoData) {
+        try {
+            console.log('🔷 Dashboard: Parsing existing SEO data...');
+            const data = typeof seoData.seoData === 'string' 
+                ? JSON.parse(seoData.seoData) 
+                : seoData.seoData;
+            
+            console.log('🔷 Dashboard: Existing data:', data);
+            Object.assign(this._formData, data);
+            
+            if (data.reviews) {
+                this._reviews = data.reviews;
+                console.log('🔷 Dashboard: Loaded', this._reviews.length, 'reviews');
+            }
+            if (data.faqs) {
+                this._faqs = data.faqs;
+                console.log('🔷 Dashboard: Loaded', this._faqs.length, 'FAQs');
+            }
+        } catch (e) {
+            console.error('🔷 Dashboard: Error parsing SEO data:', e);
+        }
+    }
+    
+    console.log('🔷 Dashboard: Rendering form steps...');
+    
+    // Render all form steps
+    try {
+        this._renderFormSteps();
+        console.log('🔷 Dashboard: Form steps rendered successfully');
+    } catch (e) {
+        console.error('🔷 Dashboard: Error rendering form steps:', e);
+        console.error('🔷 Dashboard: Error stack:', e.stack);
+        return;
+    }
+    
+    console.log('🔷 Dashboard: Switching to form view...');
+    
+    // Show form view
+    const productsView = this._shadow.getElementById('productsView');
+    const formView = this._shadow.getElementById('formView');
+    
+    if (!productsView || !formView) {
+        console.error('🔷 Dashboard: Cannot find view elements!');
+        return;
+    }
+    
+    productsView.classList.remove('active');
+    formView.classList.add('active');
+    
+    console.log('🔷 Dashboard: Form view is now active');
+    
+    // Show first step
+    try {
+        this._updateStepDisplay();
+        console.log('🔷 Dashboard: Step display updated');
+    } catch (e) {
+        console.error('🔷 Dashboard: Error updating step display:', e);
+    }
+    
+    console.log('🔷 Dashboard: ✅ Form shown successfully');
+}
+    
+   _renderFormSteps() {
+    console.log('🔷 Dashboard: _renderFormSteps called');
+    
+    const formBody = this._shadow.getElementById('formBody');
+    
+    if (!formBody) {
+        console.error('🔷 Dashboard: ❌ formBody element not found!');
+        return;
+    }
+    
+    console.log('🔷 Dashboard: Clearing form body...');
+    formBody.innerHTML = '';
+    
+    try {
+        console.log('🔷 Dashboard: Creating step 1...');
+        const step1 = this._createStep1();
+        formBody.appendChild(step1);
+        console.log('🔷 Dashboard: ✅ Step 1 added');
+        
+        console.log('🔷 Dashboard: Creating step 2...');
+        const step2 = this._createStep2();
+        formBody.appendChild(step2);
+        console.log('🔷 Dashboard: ✅ Step 2 added');
+        
+        console.log('🔷 Dashboard: Creating step 3...');
+        const step3 = this._createStep3();
+        formBody.appendChild(step3);
+        console.log('🔷 Dashboard: ✅ Step 3 added');
+        
+        console.log('🔷 Dashboard: Creating step 4...');
+        const step4 = this._createStep4();
+        formBody.appendChild(step4);
+        console.log('🔷 Dashboard: ✅ Step 4 added');
+        
+        console.log('🔷 Dashboard: Creating step 5...');
         const step5 = this._createStep5();
         formBody.appendChild(step5);
+        console.log('🔷 Dashboard: ✅ Step 5 added');
         
-        // Step 6: FAQ & Advanced
+        console.log('🔷 Dashboard: Creating step 6...');
         const step6 = this._createStep6();
         formBody.appendChild(step6);
+        console.log('🔷 Dashboard: ✅ Step 6 added');
+        
+        console.log('🔷 Dashboard: All steps created successfully');
+    } catch (e) {
+        console.error('🔷 Dashboard: ❌ Error creating steps:', e);
+        console.error('🔷 Dashboard: Error message:', e.message);
+        console.error('🔷 Dashboard: Error stack:', e.stack);
+        throw e;
     }
+}
     
     _createStep1() {
         const step = document.createElement('div');
@@ -1597,214 +1659,259 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _createStep5() {
-        const step = document.createElement('div');
-        step.className = 'form-step';
-        step.id = 'step5';
+    console.log('🔷 Dashboard: Creating step 5...');
+    
+    const step = document.createElement('div');
+    step.className = 'form-step';
+    step.id = 'step5';
+    
+    step.innerHTML = `
+        <div class="info-box">
+            <div class="info-box-title">⭐ About Reviews & Ratings</div>
+            <div class="info-box-text">
+                Star ratings can dramatically increase click-through rates in search results. Products with reviews get 
+                12-15% more clicks on average. However, reviews MUST be genuine and from real customers.
+            </div>
+        </div>
         
-        step.innerHTML = `
-            <div class="info-box">
-                <div class="info-box-title">⭐ About Reviews & Ratings</div>
-                <div class="info-box-text">
-                    Star ratings can dramatically increase click-through rates in search results. Products with reviews get 
-                    12-15% more clicks on average. However, reviews MUST be genuine and from real customers.
-                </div>
+        <div class="warning-box">
+            <div class="warning-box-title">⚠️ Critical: Fake Reviews Are Prohibited</div>
+            <div class="warning-box-text">
+                <strong>DO NOT create fake reviews!</strong> Google has sophisticated systems to detect fake reviews.
+                Violations can result in:<br>
+                • Manual penalties and ranking drops<br>
+                • Removal from Google Shopping<br>
+                • Permanent ban from rich results<br>
+                <br>
+                <strong>Only add reviews if:</strong><br>
+                ✓ They are from real customers who purchased the product<br>
+                ✓ You can verify them with order records<br>
+                ✓ They accurately represent customer sentiment<br>
+                <br>
+                When in doubt, don't add reviews manually - use a verified review platform like Trustpilot, Yotpo, or Google Customer Reviews instead.
             </div>
+        </div>
+        
+        <div class="form-section">
+            <div class="section-title">📊 Aggregate Rating</div>
             
-            <div class="warning-box">
-                <div class="warning-box-title">⚠️ Critical: Fake Reviews Are Prohibited</div>
-                <div class="warning-box-text">
-                    <strong>DO NOT create fake reviews!</strong> Google has sophisticated systems to detect fake reviews.
-                    Violations can result in:<br>
-                    • Manual penalties and ranking drops<br>
-                    • Removal from Google Shopping<br>
-                    • Permanent ban from rich results<br>
-                    <br>
-                    <strong>Only add reviews if:</strong><br>
-                    ✓ They are from real customers who purchased the product<br>
-                    ✓ You can verify them with order records<br>
-                    ✓ They accurately represent customer sentiment<br>
-                    <br>
-                    When in doubt, don't add reviews manually - use a verified review platform like Trustpilot, Yotpo, or Google Customer Reviews instead.
-                </div>
-            </div>
-            
-            <div class="form-section">
-                <div class="section-title">📊 Aggregate Rating</div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Average Rating <span class="form-label-badge">Optional</span></label>
-                        <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue" placeholder="4.5">
-                        <div class="help-text">
-                            <strong>What it is:</strong> The average rating across all reviews (0 to 5 stars).<br>
-                            <strong>Example:</strong> "4.5" for 4.5 out of 5 stars<br>
-                            <strong>Best practice:</strong> Must match your actual review platform data.
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Total Review Count <span class="form-label-badge">Optional</span></label>
-                        <input type="number" min="0" class="form-input" id="reviewCount" placeholder="89">
-                        <div class="help-text">
-                            <strong>What it is:</strong> Total number of reviews received.<br>
-                            <strong>Example:</strong> "89" if you have 89 reviews<br>
-                            <strong>Minimum:</strong> Need at least 1 review for stars to show.
-                        </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Average Rating <span class="form-label-badge">Optional</span></label>
+                    <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue" placeholder="4.5">
+                    <div class="help-text">
+                        <strong>What it is:</strong> The average rating across all reviews (0 to 5 stars).<br>
+                        <strong>Example:</strong> "4.5" for 4.5 out of 5 stars<br>
+                        <strong>Best practice:</strong> Must match your actual review platform data.
                     </div>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Best Rating <span class="form-label-badge">Optional</span></label>
-                        <input type="number" min="1" class="form-input" id="bestRating" value="5" readonly>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Highest possible rating (usually 5).<br>
-                            <strong>Default:</strong> 5 stars (standard rating scale).
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Worst Rating <span class="form-label-badge">Optional</span></label>
-                        <input type="number" min="1" class="form-input" id="worstRating" value="1" readonly>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Lowest possible rating (usually 1).<br>
-                            <strong>Default:</strong> 1 star (standard rating scale).
-                        </div>
+                <div class="form-group">
+                    <label class="form-label">Total Review Count <span class="form-label-badge">Optional</span></label>
+                    <input type="number" min="0" class="form-input" id="reviewCount" placeholder="89">
+                    <div class="help-text">
+                        <strong>What it is:</strong> Total number of reviews received.<br>
+                        <strong>Example:</strong> "89" if you have 89 reviews<br>
+                        <strong>Minimum:</strong> Need at least 1 review for stars to show.
                     </div>
                 </div>
             </div>
             
-            <div class="form-section">
-                <div class="section-title">💬 Individual Reviews</div>
-                
-                <div id="reviewsList" class="dynamic-list">
-                    <!-- Reviews will be added here -->
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Best Rating <span class="form-label-badge">Optional</span></label>
+                    <input type="number" min="1" class="form-input" id="bestRating" value="5" readonly>
+                    <div class="help-text">
+                        <strong>What it is:</strong> Highest possible rating (usually 5).<br>
+                        <strong>Default:</strong> 5 stars (standard rating scale).
+                    </div>
                 </div>
                 
-                <button type="button" class="btn-add" id="addReview">
-                    + Add Review
-                </button>
+                <div class="form-group">
+                    <label class="form-label">Worst Rating <span class="form-label-badge">Optional</span></label>
+                    <input type="number" min="1" class="form-input" id="worstRating" value="1" readonly>
+                    <div class="help-text">
+                        <strong>What it is:</strong> Lowest possible rating (usually 1).<br>
+                        <strong>Default:</strong> 1 star (standard rating scale).
+                    </div>
+                </div>
             </div>
-        `;
+        </div>
         
-        this._shadow.getElementById('aggregateRatingValue').value = this._formData.aggregateRatingValue || '';
-        this._shadow.getElementById('reviewCount').value = this._formData.reviewCount || '';
-        this._shadow.getElementById('bestRating').value = this._formData.bestRating || '5';
-        this._shadow.getElementById('worstRating').value = this._formData.worstRating || '1';
+        <div class="form-section">
+            <div class="section-title">💬 Individual Reviews</div>
+            
+            <div id="reviewsList" class="dynamic-list">
+                <!-- Reviews will be added here -->
+            </div>
+            
+            <button type="button" class="btn-add" id="addReview">
+                + Add Review
+            </button>
+        </div>
+    `;
+    
+    try {
+        console.log('🔷 Dashboard: Setting step 5 form values...');
         
-        // Render existing reviews
-        this._renderReviews();
+        // Use setTimeout to ensure elements are in DOM before setting values
+        setTimeout(() => {
+            const aggregateRatingValue = this._shadow.getElementById('aggregateRatingValue');
+            const reviewCount = this._shadow.getElementById('reviewCount');
+            const bestRating = this._shadow.getElementById('bestRating');
+            const worstRating = this._shadow.getElementById('worstRating');
+            
+            if (aggregateRatingValue) aggregateRatingValue.value = this._formData.aggregateRatingValue || '';
+            if (reviewCount) reviewCount.value = this._formData.reviewCount || '';
+            if (bestRating) bestRating.value = this._formData.bestRating || '5';
+            if (worstRating) worstRating.value = this._formData.worstRating || '1';
+            
+            console.log('🔷 Dashboard: Step 5 values set');
+            
+            // Render existing reviews
+            this._renderReviews();
+            
+            // Add review button listener
+            const addReviewBtn = this._shadow.getElementById('addReview');
+            if (addReviewBtn) {
+                addReviewBtn.addEventListener('click', () => {
+                    console.log('🔷 Dashboard: Add review clicked');
+                    this._addReview();
+                });
+            }
+        }, 0);
         
-        // Add review button listener
-        this._shadow.getElementById('addReview').addEventListener('click', () => {
-            this._addReview();
-        });
-        
-        return step;
+    } catch (e) {
+        console.error('🔷 Dashboard: Error setting up step 5:', e);
     }
     
+    return step;
+}
+    
     _createStep6() {
-        const step = document.createElement('div');
-        step.className = 'form-step';
-        step.id = 'step6';
+    console.log('🔷 Dashboard: Creating step 6...');
+    
+    const step = document.createElement('div');
+    step.className = 'form-step';
+    step.id = 'step6';
+    
+    step.innerHTML = `
+        <div class="info-box">
+            <div class="info-box-title">❓ About FAQ Schema</div>
+            <div class="info-box-text">
+                FAQ schema can get your product featured with expandable question/answer sections directly in search results.
+                This can significantly increase visibility and click-through rates.
+            </div>
+        </div>
         
-        step.innerHTML = `
-            <div class="info-box">
-                <div class="info-box-title">❓ About FAQ Schema</div>
-                <div class="info-box-text">
-                    FAQ schema can get your product featured with expandable question/answer sections directly in search results.
-                    This can significantly increase visibility and click-through rates.
+        <div class="warning-box">
+            <div class="warning-box-title">⚠️ Important: FAQ Best Practices</div>
+            <div class="warning-box-text">
+                <strong>Only add FAQs if they actually exist on your product page!</strong><br>
+                <br>
+                ✓ FAQs must be visible to users on the page<br>
+                ✓ Questions should be genuine customer questions<br>
+                ✓ Answers should be factual and helpful<br>
+                ✓ Don't use FAQs for advertising or promotional content<br>
+                ✓ Minimum 2 Q&A pairs recommended<br>
+                <br>
+                <strong>Violations can result in manual penalties.</strong>
+            </div>
+        </div>
+        
+        <div class="form-section">
+            <div class="section-title">❓ Frequently Asked Questions</div>
+            
+            <div id="faqsList" class="dynamic-list">
+                <!-- FAQs will be added here -->
+            </div>
+            
+            <button type="button" class="btn-add" id="addFaq">
+                + Add FAQ
+            </button>
+        </div>
+        
+        <div class="form-section">
+            <div class="section-title">🌐 Social Media / Open Graph</div>
+            
+            <div class="form-group">
+                <label class="form-label">Open Graph Title <span class="form-label-badge">Optional</span></label>
+                <input type="text" class="form-input" id="ogTitle" maxlength="60">
+                <div class="help-text">
+                    <strong>What it is:</strong> Title shown when shared on Facebook, LinkedIn, etc.<br>
+                    <strong>Can leave empty:</strong> Yes, will use page title if empty.
                 </div>
             </div>
             
-            <div class="warning-box">
-                <div class="warning-box-title">⚠️ Important: FAQ Best Practices</div>
-                <div class="warning-box-text">
-                    <strong>Only add FAQs if they actually exist on your product page!</strong><br>
-                    <br>
-                    ✓ FAQs must be visible to users on the page<br>
-                    ✓ Questions should be genuine customer questions<br>
-                    ✓ Answers should be factual and helpful<br>
-                    ✓ Don't use FAQs for advertising or promotional content<br>
-                    ✓ Minimum 2 Q&A pairs recommended<br>
-                    <br>
-                    <strong>Violations can result in manual penalties.</strong>
+            <div class="form-group">
+                <label class="form-label">Open Graph Description <span class="form-label-badge">Optional</span></label>
+                <textarea class="form-textarea" id="ogDescription" maxlength="200" rows="3"></textarea>
+                <div class="help-text">
+                    <strong>What it is:</strong> Description shown when shared on social media.<br>
+                    <strong>Can leave empty:</strong> Yes, will use meta description if empty.
                 </div>
             </div>
             
-            <div class="form-section">
-                <div class="section-title">❓ Frequently Asked Questions</div>
-                
-                <div id="faqsList" class="dynamic-list">
-                    <!-- FAQs will be added here -->
+            <div class="form-group">
+                <label class="form-label">Open Graph Image <span class="form-label-badge">Optional</span></label>
+                <input type="url" class="form-input" id="ogImage" placeholder="https://example.com/product-image.jpg">
+                <div class="help-text">
+                    <strong>What it is:</strong> Image shown in social media previews.<br>
+                    <strong>Recommended size:</strong> 1200x630 pixels<br>
+                    <strong>Can leave empty:</strong> Yes, will use first product image.
                 </div>
-                
-                <button type="button" class="btn-add" id="addFaq">
-                    + Add FAQ
-                </button>
             </div>
             
-            <div class="form-section">
-                <div class="section-title">🌐 Social Media / Open Graph</div>
-                
-                <div class="form-group">
-                    <label class="form-label">Open Graph Title <span class="form-label-badge">Optional</span></label>
-                    <input type="text" class="form-input" id="ogTitle" maxlength="60">
-                    <div class="help-text">
-                        <strong>What it is:</strong> Title shown when shared on Facebook, LinkedIn, etc.<br>
-                        <strong>Can leave empty:</strong> Yes, will use page title if empty.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Open Graph Description <span class="form-label-badge">Optional</span></label>
-                    <textarea class="form-textarea" id="ogDescription" maxlength="200" rows="3"></textarea>
-                    <div class="help-text">
-                        <strong>What it is:</strong> Description shown when shared on social media.<br>
-                        <strong>Can leave empty:</strong> Yes, will use meta description if empty.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Open Graph Image <span class="form-label-badge">Optional</span></label>
-                    <input type="url" class="form-input" id="ogImage" placeholder="https://example.com/product-image.jpg">
-                    <div class="help-text">
-                        <strong>What it is:</strong> Image shown in social media previews.<br>
-                        <strong>Recommended size:</strong> 1200x630 pixels<br>
-                        <strong>Can leave empty:</strong> Yes, will use first product image.
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Twitter Card Type <span class="form-label-badge">Optional</span></label>
-                    <select class="form-select" id="twitterCard">
-                        <option value="summary">Summary - Small image card</option>
-                        <option value="summary_large_image">Summary Large Image - Large image card (Recommended)</option>
-                        <option value="product">Product - Product-specific card</option>
-                    </select>
-                    <div class="help-text">
-                        <strong>What it is:</strong> How your product appears when shared on Twitter/X.<br>
-                        <strong>Best practice:</strong> Use "Summary Large Image" for products.
-                    </div>
+            <div class="form-group">
+                <label class="form-label">Twitter Card Type <span class="form-label-badge">Optional</span></label>
+                <select class="form-select" id="twitterCard">
+                    <option value="summary">Summary - Small image card</option>
+                    <option value="summary_large_image">Summary Large Image - Large image card (Recommended)</option>
+                    <option value="product">Product - Product-specific card</option>
+                </select>
+                <div class="help-text">
+                    <strong>What it is:</strong> How your product appears when shared on Twitter/X.<br>
+                    <strong>Best practice:</strong> Use "Summary Large Image" for products.
                 </div>
             </div>
-        `;
+        </div>
+    `;
+    
+    try {
+        console.log('🔷 Dashboard: Setting step 6 form values...');
         
-        this._shadow.getElementById('ogTitle').value = this._formData.ogTitle || '';
-        this._shadow.getElementById('ogDescription').value = this._formData.ogDescription || '';
-        this._shadow.getElementById('ogImage').value = this._formData.ogImage || '';
-        this._shadow.getElementById('twitterCard').value = this._formData.twitterCard || 'summary_large_image';
+        setTimeout(() => {
+            const ogTitle = this._shadow.getElementById('ogTitle');
+            const ogDescription = this._shadow.getElementById('ogDescription');
+            const ogImage = this._shadow.getElementById('ogImage');
+            const twitterCard = this._shadow.getElementById('twitterCard');
+            
+            if (ogTitle) ogTitle.value = this._formData.ogTitle || '';
+            if (ogDescription) ogDescription.value = this._formData.ogDescription || '';
+            if (ogImage) ogImage.value = this._formData.ogImage || '';
+            if (twitterCard) twitterCard.value = this._formData.twitterCard || 'summary_large_image';
+            
+            console.log('🔷 Dashboard: Step 6 values set');
+            
+            // Render existing FAQs
+            this._renderFaqs();
+            
+            // Add FAQ button listener
+            const addFaqBtn = this._shadow.getElementById('addFaq');
+            if (addFaqBtn) {
+                addFaqBtn.addEventListener('click', () => {
+                    console.log('🔷 Dashboard: Add FAQ clicked');
+                    this._addFaq();
+                });
+            }
+        }, 0);
         
-        // Render existing FAQs
-        this._renderFaqs();
-        
-        // Add FAQ button listener
-        this._shadow.getElementById('addFaq').addEventListener('click', () => {
-            this._addFaq();
-        });
-        
-        return step;
+    } catch (e) {
+        console.error('🔷 Dashboard: Error setting up step 6:', e);
     }
+    
+    return step;
+}
     
     _renderReviews() {
         const reviewsList = this._shadow.getElementById('reviewsList');
