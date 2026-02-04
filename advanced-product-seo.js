@@ -1498,169 +1498,176 @@ class ProductSEODashboard extends HTMLElement {
     }
     
     _createStep4() {
-        const step = document.createElement('div');
-        step.className = 'form-step';
-        step.id = 'step4';
-        
-        const currencies = this._getAllCurrencies();
-        const countries = this._getAllCountries();
-        
-        step.innerHTML = `
-            <div class="info-box">
-                <div class="info-box-title">🚚 About Merchant Listings</div>
-                <div class="info-box-text">
-                    This section is REQUIRED if you want to appear in Google Shopping or Merchant Listings. Shipping and return
-                    information helps customers make informed decisions and can improve your click-through rate.
-                </div>
+    const step = document.createElement('div');
+    step.className = 'form-step';
+    step.id = 'step4';
+    
+    const currencies = this._getAllCurrencies();
+    const countries = this._getAllCountries();
+    
+    step.innerHTML = `
+        <div class="info-box">
+            <div class="info-box-title">🚚 About Merchant Listings</div>
+            <div class="info-box-text">
+                This section is REQUIRED if you want to appear in Google Shopping or Merchant Listings. Shipping and return
+                information helps customers make informed decisions and can improve your click-through rate.
             </div>
-            
-            <div class="warning-box">
-                <div class="warning-box-title">⚠️ Google Shopping Requirements</div>
-                <div class="warning-box-text">
-                    If you want your products to appear in Google Shopping (the shopping tab in search results), you MUST complete
-                    all shipping and return policy fields. Without this information, your products will only show in regular search results.
-                </div>
+        </div>
+        
+        <div class="warning-box">
+            <div class="warning-box-title">⚠️ Google Shopping Requirements</div>
+            <div class="warning-box-text">
+                If you want your products to appear in Google Shopping (the shopping tab in search results), you MUST complete
+                all shipping and return policy fields. Without this information, your products will only show in regular search results.
             </div>
+        </div>
+        
+        <div class="form-section">
+            <div class="section-title">📦 Shipping Details</div>
             
-            <div class="form-section">
-                <div class="section-title">📦 Shipping Details</div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Shipping Cost <span class="form-label-badge">For Shopping</span></label>
-                        <input type="number" step="0.01" min="0" class="form-input" id="shippingCost" placeholder="0.00">
-                        <div class="help-text">
-                            <strong>What it is:</strong> The shipping fee customers pay (use "0" for free shipping).<br>
-                            <strong>Example:</strong> "5.99" or "0" for free shipping<br>
-                            <strong>Required for:</strong> Google Shopping eligibility.
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Shipping Currency <span class="form-label-badge">For Shopping</span></label>
-                        <select class="form-select" id="shippingCurrency">
-                            ${currencies}
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Currency for the shipping cost.<br>
-                            <strong>Best practice:</strong> Should match your product price currency.
-                        </div>
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Shipping Cost <span class="form-label-badge">For Shopping</span></label>
+                    <input type="number" step="0.01" min="0" class="form-input" id="shippingCost" placeholder="0.00" value="${this._formData.shippingCost || ''}">
+                    <div class="help-text">
+                        <strong>What it is:</strong> The shipping fee customers pay (use "0" for free shipping).<br>
+                        <strong>Example:</strong> "5.99" or "0" for free shipping<br>
+                        <strong>Required for:</strong> Google Shopping eligibility.
                     </div>
                 </div>
                 
                 <div class="form-group">
-                    <label class="form-label">Shipping Destination <span class="form-label-badge">For Shopping</span></label>
-                    <select class="form-select" id="shippingDestination">
-                        ${countries}
+                    <label class="form-label">Shipping Currency <span class="form-label-badge">For Shopping</span></label>
+                    <select class="form-select" id="shippingCurrency">
+                        ${currencies.split('\n').map(line => {
+                            const match = line.match(/value="([^"]+)"/);
+                            if (match) {
+                                const code = match[1];
+                                return line.replace('>', this._formData.shippingCurrency === code ? ' selected>' : '>');
+                            }
+                            return line;
+                        }).join('\n')}
                     </select>
                     <div class="help-text">
-                        <strong>What it is:</strong> The country/region you ship to.<br>
-                        <strong>Example:</strong> "US" for United States, "GB" for United Kingdom<br>
-                        <strong>Required for:</strong> Google Shopping.
-                    </div>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Handling Time (Days) <span class="form-label-badge">Optional</span></label>
-                        <div class="form-row">
-                            <input type="number" min="0" class="form-input" id="handlingTimeMin" placeholder="Min: 0">
-                            <input type="number" min="0" class="form-input" id="handlingTimeMax" placeholder="Max: 1">
-                        </div>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Time to process and prepare the order before shipping.<br>
-                            <strong>Example:</strong> Min: 0, Max: 1 means "ships within 1 business day"
-                        </div>
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Delivery Time (Days) <span class="form-label-badge">For Shopping</span></label>
-                        <div class="form-row">
-                            <input type="number" min="0" class="form-input" id="deliveryTimeMin" placeholder="Min: 2">
-                            <input type="number" min="0" class="form-input" id="deliveryTimeMax" placeholder="Max: 5">
-                        </div>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Transit time for shipping carrier to deliver.<br>
-                            <strong>Example:</strong> Min: 2, Max: 5 means "delivery in 2-5 business days"<br>
-                            <strong>Required for:</strong> Google Shopping.
-                        </div>
+                        <strong>What it is:</strong> Currency for the shipping cost.<br>
+                        <strong>Best practice:</strong> Should match your product price currency.
                     </div>
                 </div>
             </div>
             
-            <div class="form-section">
-                <div class="section-title">↩️ Return Policy</div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Return Window (Days) <span class="form-label-badge">For Shopping</span></label>
-                        <input type="number" min="0" class="form-input" id="returnDays" placeholder="30">
-                        <div class="help-text">
-                            <strong>What it is:</strong> How many days customers have to return the product.<br>
-                            <strong>Example:</strong> "30" for a 30-day return window<br>
-                            <strong>Required for:</strong> Google Shopping.
-                        </div>
+            <div class="form-group">
+                <label class="form-label">Shipping Destination <span class="form-label-badge">For Shopping</span></label>
+                <select class="form-select" id="shippingDestination">
+                    ${countries.split('\n').map(line => {
+                        const match = line.match(/value="([^"]+)"/);
+                        if (match) {
+                            const code = match[1];
+                            return line.replace('>', this._formData.shippingDestination === code ? ' selected>' : '>');
+                        }
+                        return line;
+                    }).join('\n')}
+                </select>
+                <div class="help-text">
+                    <strong>What it is:</strong> The country/region you ship to.<br>
+                    <strong>Example:</strong> "US" for United States, "GB" for United Kingdom<br>
+                    <strong>Required for:</strong> Google Shopping.
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Handling Time (Days) <span class="form-label-badge">Optional</span></label>
+                    <div class="form-row">
+                        <input type="number" min="0" class="form-input" id="handlingTimeMin" placeholder="Min: 0" value="${this._formData.handlingTimeMin || ''}">
+                        <input type="number" min="0" class="form-input" id="handlingTimeMax" placeholder="Max: 1" value="${this._formData.handlingTimeMax || ''}">
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Return Policy Country <span class="form-label-badge">For Shopping</span></label>
-                        <select class="form-select" id="returnCountry">
-                            ${countries}
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> The country where your return policy applies.
-                        </div>
+                    <div class="help-text">
+                        <strong>What it is:</strong> Time to process and prepare the order before shipping.<br>
+                        <strong>Example:</strong> Min: 0, Max: 1 means "ships within 1 business day"
                     </div>
                 </div>
                 
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Return Method <span class="form-label-badge">Optional</span></label>
-                        <select class="form-select" id="returnMethod">
-                            <option value="">-- Select Return Method --</option>
-                            <option value="https://schema.org/ReturnByMail">Return by Mail - Ship it back</option>
-                            <option value="https://schema.org/ReturnInStore">Return in Store - Return to physical location</option>
-                            <option value="https://schema.org/ReturnAtKiosk">Return at Kiosk - Drop off at kiosk</option>
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> How customers can return products.
-                        </div>
+                <div class="form-group">
+                    <label class="form-label">Delivery Time (Days) <span class="form-label-badge">For Shopping</span></label>
+                    <div class="form-row">
+                        <input type="number" min="0" class="form-input" id="deliveryTimeMin" placeholder="Min: 2" value="${this._formData.deliveryTimeMin || ''}">
+                        <input type="number" min="0" class="form-input" id="deliveryTimeMax" placeholder="Max: 5" value="${this._formData.deliveryTimeMax || ''}">
                     </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Return Fees <span class="form-label-badge">Optional</span></label>
-                        <select class="form-select" id="returnFees">
-                            <option value="">-- Select Return Fees --</option>
-                            <option value="https://schema.org/FreeReturn">Free Return - No charge for returns</option>
-                            <option value="https://schema.org/ReturnShippingFees">Customer Pays Shipping - Customer pays return shipping</option>
-                            <option value="https://schema.org/RestockingFees">Restocking Fee - Deducted from refund</option>
-                        </select>
-                        <div class="help-text">
-                            <strong>What it is:</strong> Who pays for return shipping.
-                        </div>
+                    <div class="help-text">
+                        <strong>What it is:</strong> Transit time for shipping carrier to deliver.<br>
+                        <strong>Example:</strong> Min: 2, Max: 5 means "delivery in 2-5 business days"<br>
+                        <strong>Required for:</strong> Google Shopping.
                     </div>
                 </div>
             </div>
-        `;
+        </div>
         
-        this._shadow.getElementById('shippingCost').value = this._formData.shippingCost || '';
-        this._shadow.getElementById('shippingCurrency').value = this._formData.shippingCurrency || 'USD';
-        this._shadow.getElementById('shippingDestination').value = this._formData.shippingDestination || '';
-        this._shadow.getElementById('handlingTimeMin').value = this._formData.handlingTimeMin || '';
-        this._shadow.getElementById('handlingTimeMax').value = this._formData.handlingTimeMax || '';
-        this._shadow.getElementById('deliveryTimeMin').value = this._formData.deliveryTimeMin || '';
-        this._shadow.getElementById('deliveryTimeMax').value = this._formData.deliveryTimeMax || '';
-        this._shadow.getElementById('returnDays').value = this._formData.returnDays || '';
-        this._shadow.getElementById('returnCountry').value = this._formData.returnCountry || '';
-        this._shadow.getElementById('returnMethod').value = this._formData.returnMethod || '';
-        this._shadow.getElementById('returnFees').value = this._formData.returnFees || '';
-        
-        return step;
-    }
+        <div class="form-section">
+            <div class="section-title">↩️ Return Policy</div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Return Window (Days) <span class="form-label-badge">For Shopping</span></label>
+                    <input type="number" min="0" class="form-input" id="returnDays" placeholder="30" value="${this._formData.returnDays || ''}">
+                    <div class="help-text">
+                        <strong>What it is:</strong> How many days customers have to return the product.<br>
+                        <strong>Example:</strong> "30" for a 30-day return window<br>
+                        <strong>Required for:</strong> Google Shopping.
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Return Policy Country <span class="form-label-badge">For Shopping</span></label>
+                    <select class="form-select" id="returnCountry">
+                        ${countries.split('\n').map(line => {
+                            const match = line.match(/value="([^"]+)"/);
+                            if (match) {
+                                const code = match[1];
+                                return line.replace('>', this._formData.returnCountry === code ? ' selected>' : '>');
+                            }
+                            return line;
+                        }).join('\n')}
+                    </select>
+                    <div class="help-text">
+                        <strong>What it is:</strong> The country where your return policy applies.
+                    </div>
+                </div>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Return Method <span class="form-label-badge">Optional</span></label>
+                    <select class="form-select" id="returnMethod">
+                        <option value="">-- Select Return Method --</option>
+                        <option value="https://schema.org/ReturnByMail" ${this._formData.returnMethod === 'https://schema.org/ReturnByMail' ? 'selected' : ''}>Return by Mail - Ship it back</option>
+                        <option value="https://schema.org/ReturnInStore" ${this._formData.returnMethod === 'https://schema.org/ReturnInStore' ? 'selected' : ''}>Return in Store - Return to physical location</option>
+                        <option value="https://schema.org/ReturnAtKiosk" ${this._formData.returnMethod === 'https://schema.org/ReturnAtKiosk' ? 'selected' : ''}>Return at Kiosk - Drop off at kiosk</option>
+                    </select>
+                    <div class="help-text">
+                        <strong>What it is:</strong> How customers can return products.
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Return Fees <span class="form-label-badge">Optional</span></label>
+                    <select class="form-select" id="returnFees">
+                        <option value="">-- Select Return Fees --</option>
+                        <option value="https://schema.org/FreeReturn" ${this._formData.returnFees === 'https://schema.org/FreeReturn' ? 'selected' : ''}>Free Return - No charge for returns</option>
+                        <option value="https://schema.org/ReturnShippingFees" ${this._formData.returnFees === 'https://schema.org/ReturnShippingFees' ? 'selected' : ''}>Customer Pays Shipping - Customer pays return shipping</option>
+                        <option value="https://schema.org/RestockingFees" ${this._formData.returnFees === 'https://schema.org/RestockingFees' ? 'selected' : ''}>Restocking Fee - Deducted from refund</option>
+                    </select>
+                    <div class="help-text">
+                        <strong>What it is:</strong> Who pays for return shipping.
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
     
-    _createStep5() {
-    console.log('🔷 Dashboard: Creating step 5...');
-    
+    return step;
+}
+
+_createStep5() {
     const step = document.createElement('div');
     step.className = 'form-step';
     step.id = 'step5';
@@ -1698,7 +1705,7 @@ class ProductSEODashboard extends HTMLElement {
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Average Rating <span class="form-label-badge">Optional</span></label>
-                    <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue" placeholder="4.5">
+                    <input type="number" step="0.1" min="0" max="5" class="form-input" id="aggregateRatingValue" placeholder="4.5" value="${this._formData.aggregateRatingValue || ''}">
                     <div class="help-text">
                         <strong>What it is:</strong> The average rating across all reviews (0 to 5 stars).<br>
                         <strong>Example:</strong> "4.5" for 4.5 out of 5 stars<br>
@@ -1708,7 +1715,7 @@ class ProductSEODashboard extends HTMLElement {
                 
                 <div class="form-group">
                     <label class="form-label">Total Review Count <span class="form-label-badge">Optional</span></label>
-                    <input type="number" min="0" class="form-input" id="reviewCount" placeholder="89">
+                    <input type="number" min="0" class="form-input" id="reviewCount" placeholder="89" value="${this._formData.reviewCount || ''}">
                     <div class="help-text">
                         <strong>What it is:</strong> Total number of reviews received.<br>
                         <strong>Example:</strong> "89" if you have 89 reviews<br>
@@ -1720,7 +1727,7 @@ class ProductSEODashboard extends HTMLElement {
             <div class="form-row">
                 <div class="form-group">
                     <label class="form-label">Best Rating <span class="form-label-badge">Optional</span></label>
-                    <input type="number" min="1" class="form-input" id="bestRating" value="5" readonly>
+                    <input type="number" min="1" class="form-input" id="bestRating" value="${this._formData.bestRating || '5'}" readonly>
                     <div class="help-text">
                         <strong>What it is:</strong> Highest possible rating (usually 5).<br>
                         <strong>Default:</strong> 5 stars (standard rating scale).
@@ -1729,7 +1736,7 @@ class ProductSEODashboard extends HTMLElement {
                 
                 <div class="form-group">
                     <label class="form-label">Worst Rating <span class="form-label-badge">Optional</span></label>
-                    <input type="number" min="1" class="form-input" id="worstRating" value="1" readonly>
+                    <input type="number" min="1" class="form-input" id="worstRating" value="${this._formData.worstRating || '1'}" readonly>
                     <div class="help-text">
                         <strong>What it is:</strong> Lowest possible rating (usually 1).<br>
                         <strong>Default:</strong> 1 star (standard rating scale).
@@ -1751,46 +1758,24 @@ class ProductSEODashboard extends HTMLElement {
         </div>
     `;
     
-    try {
-        console.log('🔷 Dashboard: Setting step 5 form values...');
+    // Set up the add review button after a slight delay to ensure DOM is ready
+    setTimeout(() => {
+        const addReviewBtn = step.querySelector('#addReview');
+        if (addReviewBtn) {
+            addReviewBtn.addEventListener('click', () => {
+                console.log('🔷 Dashboard: Add review clicked');
+                this._addReview();
+            });
+        }
         
-        // Use setTimeout to ensure elements are in DOM before setting values
-        setTimeout(() => {
-            const aggregateRatingValue = this._shadow.getElementById('aggregateRatingValue');
-            const reviewCount = this._shadow.getElementById('reviewCount');
-            const bestRating = this._shadow.getElementById('bestRating');
-            const worstRating = this._shadow.getElementById('worstRating');
-            
-            if (aggregateRatingValue) aggregateRatingValue.value = this._formData.aggregateRatingValue || '';
-            if (reviewCount) reviewCount.value = this._formData.reviewCount || '';
-            if (bestRating) bestRating.value = this._formData.bestRating || '5';
-            if (worstRating) worstRating.value = this._formData.worstRating || '1';
-            
-            console.log('🔷 Dashboard: Step 5 values set');
-            
-            // Render existing reviews
-            this._renderReviews();
-            
-            // Add review button listener
-            const addReviewBtn = this._shadow.getElementById('addReview');
-            if (addReviewBtn) {
-                addReviewBtn.addEventListener('click', () => {
-                    console.log('🔷 Dashboard: Add review clicked');
-                    this._addReview();
-                });
-            }
-        }, 0);
-        
-    } catch (e) {
-        console.error('🔷 Dashboard: Error setting up step 5:', e);
-    }
+        // Render existing reviews
+        this._renderReviews();
+    }, 0);
     
     return step;
 }
-    
-    _createStep6() {
-    console.log('🔷 Dashboard: Creating step 6...');
-    
+
+_createStep6() {
     const step = document.createElement('div');
     step.className = 'form-step';
     step.id = 'step6';
@@ -1836,7 +1821,7 @@ class ProductSEODashboard extends HTMLElement {
             
             <div class="form-group">
                 <label class="form-label">Open Graph Title <span class="form-label-badge">Optional</span></label>
-                <input type="text" class="form-input" id="ogTitle" maxlength="60">
+                <input type="text" class="form-input" id="ogTitle" maxlength="60" value="${this._formData.ogTitle || ''}">
                 <div class="help-text">
                     <strong>What it is:</strong> Title shown when shared on Facebook, LinkedIn, etc.<br>
                     <strong>Can leave empty:</strong> Yes, will use page title if empty.
@@ -1845,7 +1830,7 @@ class ProductSEODashboard extends HTMLElement {
             
             <div class="form-group">
                 <label class="form-label">Open Graph Description <span class="form-label-badge">Optional</span></label>
-                <textarea class="form-textarea" id="ogDescription" maxlength="200" rows="3"></textarea>
+                <textarea class="form-textarea" id="ogDescription" maxlength="200" rows="3">${this._formData.ogDescription || ''}</textarea>
                 <div class="help-text">
                     <strong>What it is:</strong> Description shown when shared on social media.<br>
                     <strong>Can leave empty:</strong> Yes, will use meta description if empty.
@@ -1854,7 +1839,7 @@ class ProductSEODashboard extends HTMLElement {
             
             <div class="form-group">
                 <label class="form-label">Open Graph Image <span class="form-label-badge">Optional</span></label>
-                <input type="url" class="form-input" id="ogImage" placeholder="https://example.com/product-image.jpg">
+                <input type="url" class="form-input" id="ogImage" placeholder="https://example.com/product-image.jpg" value="${this._formData.ogImage || ''}">
                 <div class="help-text">
                     <strong>What it is:</strong> Image shown in social media previews.<br>
                     <strong>Recommended size:</strong> 1200x630 pixels<br>
@@ -1865,9 +1850,9 @@ class ProductSEODashboard extends HTMLElement {
             <div class="form-group">
                 <label class="form-label">Twitter Card Type <span class="form-label-badge">Optional</span></label>
                 <select class="form-select" id="twitterCard">
-                    <option value="summary">Summary - Small image card</option>
-                    <option value="summary_large_image">Summary Large Image - Large image card (Recommended)</option>
-                    <option value="product">Product - Product-specific card</option>
+                    <option value="summary" ${this._formData.twitterCard === 'summary' ? 'selected' : ''}>Summary - Small image card</option>
+                    <option value="summary_large_image" ${this._formData.twitterCard === 'summary_large_image' ? 'selected' : ''}>Summary Large Image - Large image card (Recommended)</option>
+                    <option value="product" ${this._formData.twitterCard === 'product' ? 'selected' : ''}>Product - Product-specific card</option>
                 </select>
                 <div class="help-text">
                     <strong>What it is:</strong> How your product appears when shared on Twitter/X.<br>
@@ -1877,177 +1862,180 @@ class ProductSEODashboard extends HTMLElement {
         </div>
     `;
     
-    try {
-        console.log('🔷 Dashboard: Setting step 6 form values...');
+    // Set up the add FAQ button after a slight delay to ensure DOM is ready
+    setTimeout(() => {
+        const addFaqBtn = step.querySelector('#addFaq');
+        if (addFaqBtn) {
+            addFaqBtn.addEventListener('click', () => {
+                console.log('🔷 Dashboard: Add FAQ clicked');
+                this._addFaq();
+            });
+        }
         
-        setTimeout(() => {
-            const ogTitle = this._shadow.getElementById('ogTitle');
-            const ogDescription = this._shadow.getElementById('ogDescription');
-            const ogImage = this._shadow.getElementById('ogImage');
-            const twitterCard = this._shadow.getElementById('twitterCard');
-            
-            if (ogTitle) ogTitle.value = this._formData.ogTitle || '';
-            if (ogDescription) ogDescription.value = this._formData.ogDescription || '';
-            if (ogImage) ogImage.value = this._formData.ogImage || '';
-            if (twitterCard) twitterCard.value = this._formData.twitterCard || 'summary_large_image';
-            
-            console.log('🔷 Dashboard: Step 6 values set');
-            
-            // Render existing FAQs
-            this._renderFaqs();
-            
-            // Add FAQ button listener
-            const addFaqBtn = this._shadow.getElementById('addFaq');
-            if (addFaqBtn) {
-                addFaqBtn.addEventListener('click', () => {
-                    console.log('🔷 Dashboard: Add FAQ clicked');
-                    this._addFaq();
-                });
-            }
-        }, 0);
-        
-    } catch (e) {
-        console.error('🔷 Dashboard: Error setting up step 6:', e);
-    }
+        // Render existing FAQs
+        this._renderFaqs();
+    }, 0);
     
     return step;
 }
+
+_renderReviews() {
+    const reviewsList = this._shadow.getElementById('reviewsList');
     
-    _renderReviews() {
-        const reviewsList = this._shadow.getElementById('reviewsList');
-        reviewsList.innerHTML = '';
+    if (!reviewsList) {
+        console.warn('🔷 Dashboard: reviewsList element not found');
+        return;
+    }
+    
+    reviewsList.innerHTML = '';
+    
+    if (this._reviews.length === 0) {
+        reviewsList.innerHTML = '<p style="color: #6b7280; font-style: italic; padding: 20px; text-align: center;">No reviews added yet. Click "Add Review" to add one.</p>';
+        return;
+    }
+    
+    this._reviews.forEach((review, index) => {
+        const reviewItem = document.createElement('div');
+        reviewItem.className = 'dynamic-item';
+        reviewItem.innerHTML = `
+            <div class="dynamic-item-header">
+                <div class="dynamic-item-title">Review #${index + 1}</div>
+                <button type="button" class="btn-remove" data-index="${index}">Remove</button>
+            </div>
+            
+            <div class="form-row">
+                <div class="form-group">
+                    <label class="form-label">Reviewer Name</label>
+                    <input type="text" class="form-input review-author" data-index="${index}" value="${review.author || ''}" placeholder="John Smith">
+                </div>
+                
+                <div class="form-group">
+                    <label class="form-label">Rating (1-5)</label>
+                    <input type="number" min="1" max="5" class="form-input review-rating" data-index="${index}" value="${review.rating || ''}" placeholder="5">
+                </div>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Review Title <span class="form-label-badge">Optional</span></label>
+                <input type="text" class="form-input review-title" data-index="${index}" value="${review.title || ''}" placeholder="Great product!">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Review Text <span class="form-label-badge">Optional</span></label>
+                <textarea class="form-textarea review-text" data-index="${index}" rows="3" placeholder="This product exceeded my expectations...">${review.text || ''}</textarea>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Review Date <span class="form-label-badge">Optional</span></label>
+                <input type="date" class="form-input review-date" data-index="${index}" value="${review.date || ''}">
+            </div>
+        `;
         
-        this._reviews.forEach((review, index) => {
-            const reviewItem = document.createElement('div');
-            reviewItem.className = 'dynamic-item';
-            reviewItem.innerHTML = `
-                <div class="dynamic-item-header">
-                    <div class="dynamic-item-title">Review #${index + 1}</div>
-                    <button type="button" class="btn-remove" data-index="${index}">Remove</button>
-                </div>
-                
-                <div class="form-row">
-                    <div class="form-group">
-                        <label class="form-label">Reviewer Name</label>
-                        <input type="text" class="form-input review-author" data-index="${index}" value="${review.author || ''}" placeholder="John Smith">
-                    </div>
-                    
-                    <div class="form-group">
-                        <label class="form-label">Rating (1-5)</label>
-                        <input type="number" min="1" max="5" class="form-input review-rating" data-index="${index}" value="${review.rating || ''}" placeholder="5">
-                    </div>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Review Title <span class="form-label-badge">Optional</span></label>
-                    <input type="text" class="form-input review-title" data-index="${index}" value="${review.title || ''}" placeholder="Great product!">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Review Text <span class="form-label-badge">Optional</span></label>
-                    <textarea class="form-textarea review-text" data-index="${index}" rows="3" placeholder="This product exceeded my expectations...">${review.text || ''}</textarea>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Review Date <span class="form-label-badge">Optional</span></label>
-                    <input type="date" class="form-input review-date" data-index="${index}" value="${review.date || ''}">
-                </div>
-            `;
-            
-            reviewsList.appendChild(reviewItem);
-            
-            // Add remove listener
-            reviewItem.querySelector('.btn-remove').addEventListener('click', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                this._reviews.splice(idx, 1);
-                this._renderReviews();
-            });
-            
-            // Add change listeners
-            reviewItem.querySelector('.review-author').addEventListener('input', (e) => {
-                this._reviews[index].author = e.target.value;
-            });
-            
-            reviewItem.querySelector('.review-rating').addEventListener('input', (e) => {
-                this._reviews[index].rating = e.target.value;
-            });
-            
-            reviewItem.querySelector('.review-title').addEventListener('input', (e) => {
-                this._reviews[index].title = e.target.value;
-            });
-            
-            reviewItem.querySelector('.review-text').addEventListener('input', (e) => {
-                this._reviews[index].text = e.target.value;
-            });
-            
-            reviewItem.querySelector('.review-date').addEventListener('input', (e) => {
-                this._reviews[index].date = e.target.value;
-            });
-        });
-    }
-    
-    _addReview() {
-        this._reviews.push({
-            author: '',
-            rating: '',
-            title: '',
-            text: '',
-            date: ''
-        });
-        this._renderReviews();
-    }
-    
-    _renderFaqs() {
-        const faqsList = this._shadow.getElementById('faqsList');
-        faqsList.innerHTML = '';
+        reviewsList.appendChild(reviewItem);
         
-        this._faqs.forEach((faq, index) => {
-            const faqItem = document.createElement('div');
-            faqItem.className = 'dynamic-item';
-            faqItem.innerHTML = `
-                <div class="dynamic-item-header">
-                    <div class="dynamic-item-title">FAQ #${index + 1}</div>
-                    <button type="button" class="btn-remove" data-index="${index}">Remove</button>
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Question</label>
-                    <input type="text" class="form-input faq-question" data-index="${index}" value="${faq.question || ''}" placeholder="What is the warranty period?">
-                </div>
-                
-                <div class="form-group">
-                    <label class="form-label">Answer</label>
-                    <textarea class="form-textarea faq-answer" data-index="${index}" rows="3" placeholder="This product comes with a 2-year manufacturer warranty...">${faq.answer || ''}</textarea>
-                </div>
-            `;
-            
-            faqsList.appendChild(faqItem);
-            
-            // Add remove listener
-            faqItem.querySelector('.btn-remove').addEventListener('click', (e) => {
-                const idx = parseInt(e.target.dataset.index);
-                this._faqs.splice(idx, 1);
-                this._renderFaqs();
-            });
-            
-            // Add change listeners
-            faqItem.querySelector('.faq-question').addEventListener('input', (e) => {
-                this._faqs[index].question = e.target.value;
-            });
-            
-            faqItem.querySelector('.faq-answer').addEventListener('input', (e) => {
-                this._faqs[index].answer = e.target.value;
-            });
+        // Add remove listener
+        reviewItem.querySelector('.btn-remove').addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            this._reviews.splice(idx, 1);
+            this._renderReviews();
         });
+        
+        // Add change listeners
+        reviewItem.querySelector('.review-author').addEventListener('input', (e) => {
+            this._reviews[index].author = e.target.value;
+        });
+        
+        reviewItem.querySelector('.review-rating').addEventListener('input', (e) => {
+            this._reviews[index].rating = e.target.value;
+        });
+        
+        reviewItem.querySelector('.review-title').addEventListener('input', (e) => {
+            this._reviews[index].title = e.target.value;
+        });
+        
+        reviewItem.querySelector('.review-text').addEventListener('input', (e) => {
+            this._reviews[index].text = e.target.value;
+        });
+        
+        reviewItem.querySelector('.review-date').addEventListener('input', (e) => {
+            this._reviews[index].date = e.target.value;
+        });
+    });
+}
+
+_addReview() {
+    this._reviews.push({
+        author: '',
+        rating: '',
+        title: '',
+        text: '',
+        date: ''
+    });
+    this._renderReviews();
+}
+
+_renderFaqs() {
+    const faqsList = this._shadow.getElementById('faqsList');
+    
+    if (!faqsList) {
+        console.warn('🔷 Dashboard: faqsList element not found');
+        return;
     }
     
-    _addFaq() {
-        this._faqs.push({
-            question: '',
-            answer: ''
-        });
-        this._renderFaqs();
+    faqsList.innerHTML = '';
+    
+    if (this._faqs.length === 0) {
+        faqsList.innerHTML = '<p style="color: #6b7280; font-style: italic; padding: 20px; text-align: center;">No FAQs added yet. Click "Add FAQ" to add one.</p>';
+        return;
     }
+    
+    this._faqs.forEach((faq, index) => {
+        const faqItem = document.createElement('div');
+        faqItem.className = 'dynamic-item';
+        faqItem.innerHTML = `
+            <div class="dynamic-item-header">
+                <div class="dynamic-item-title">FAQ #${index + 1}</div>
+                <button type="button" class="btn-remove" data-index="${index}">Remove</button>
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Question</label>
+                <input type="text" class="form-input faq-question" data-index="${index}" value="${faq.question || ''}" placeholder="What is the warranty period?">
+            </div>
+            
+            <div class="form-group">
+                <label class="form-label">Answer</label>
+                <textarea class="form-textarea faq-answer" data-index="${index}" rows="3" placeholder="This product comes with a 2-year manufacturer warranty...">${faq.answer || ''}</textarea>
+            </div>
+        `;
+        
+        faqsList.appendChild(faqItem);
+        
+        // Add remove listener
+        faqItem.querySelector('.btn-remove').addEventListener('click', (e) => {
+            const idx = parseInt(e.target.dataset.index);
+            this._faqs.splice(idx, 1);
+            this._renderFaqs();
+        });
+        
+        // Add change listeners
+        faqItem.querySelector('.faq-question').addEventListener('input', (e) => {
+            this._faqs[index].question = e.target.value;
+        });
+        
+        faqItem.querySelector('.faq-answer').addEventListener('input', (e) => {
+            this._faqs[index].answer = e.target.value;
+        });
+    });
+}
+
+_addFaq() {
+    this._faqs.push({
+        question: '',
+        answer: ''
+    });
+    this._renderFaqs();
+}
     
     _updateStepDisplay() {
         const steps = this._shadow.querySelectorAll('.form-step');
