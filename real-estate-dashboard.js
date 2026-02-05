@@ -20,7 +20,7 @@ class RealEstateDashboard extends HTMLElement {
     }
     
     static get observedAttributes() {
-        return ['listing-data', 'all-listings-data', 'notification', 'upload-progress'];
+        return ['listing-data', 'all-listings-data', 'listing-counts', 'notification', 'upload-progress'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
@@ -37,6 +37,15 @@ class RealEstateDashboard extends HTMLElement {
             try {
                 const data = JSON.parse(newValue);
                 this.setAllListingsForSelection(data.listings);
+            } catch (e) {
+                console.error('🏠 Dashboard: Parse error:', e);
+            }
+        }
+        
+        if (name === 'listing-counts' && newValue && newValue !== oldValue) {
+            try {
+                const counts = JSON.parse(newValue);
+                this.setListingCounts(counts);
             } catch (e) {
                 console.error('🏠 Dashboard: Parse error:', e);
             }
@@ -925,7 +934,7 @@ class RealEstateDashboard extends HTMLElement {
                             <div style="font-size: 12px; color: #6b7280;">Recommended: 1200x800px</div>
                         </div>
                     </label>
-                    <div class="file-preview" id="thumbnailPreview">
+                    <div class="file-preview ${this._formData.thumbnailImage ? 'active' : ''}" id="thumbnailPreview">
                         ${this._formData.thumbnailImage ? `<img src="${this._convertWixImageUrl(this._formData.thumbnailImage)}" class="preview-img">` : ''}
                     </div>
                 </div>
@@ -940,7 +949,18 @@ class RealEstateDashboard extends HTMLElement {
                             <div style="font-size: 12px; color: #6b7280;">You can select multiple images</div>
                         </div>
                     </label>
-                    <div class="gallery-preview" id="galleryPreview"></div>
+                    <div class="gallery-preview" id="galleryPreview">
+                        ${this._formData.galleryImages && this._formData.galleryImages.length > 0 ? 
+                            this._formData.galleryImages.map((img, idx) => {
+                                const imgUrl = typeof img === 'string' ? img : img.src;
+                                return `
+                                    <div class="gallery-item">
+                                        <img src="${this._convertWixImageUrl(imgUrl)}">
+                                    </div>
+                                `;
+                            }).join('') : ''
+                        }
+                    </div>
                 </div>
             </div>
             
@@ -1261,13 +1281,60 @@ class RealEstateDashboard extends HTMLElement {
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="label">School District</label>
-                        <input type="text" class="input" id="schoolDistrict" value="${this._formData.schoolDistrict || ''}" placeholder="District Name">
+                        <label class="label">Foundation</label>
+                        <input type="text" class="input" id="foundation" value="${this._formData.foundation || ''}" placeholder="Concrete Slab, Crawl Space, Basement">
                     </div>
                     
                     <div class="form-group">
+                        <label class="label">Roof</label>
+                        <input type="text" class="input" id="roof" value="${this._formData.roof || ''}" placeholder="Asphalt Shingle, Tile, Metal">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Exterior Material</label>
+                        <input type="text" class="input" id="exteriorMaterial" value="${this._formData.exteriorMaterial || ''}" placeholder="Brick, Vinyl Siding, Stucco">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Appliances</label>
+                        <input type="text" class="input" id="appliances" value="${this._formData.appliances || ''}" placeholder="Refrigerator, Stove, Dishwasher">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Utilities</label>
+                        <input type="text" class="input" id="utilities" value="${this._formData.utilities || ''}" placeholder="Electric, Gas, Water, Sewer">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Occupancy Status</label>
+                        <input type="text" class="input" id="occupancy" value="${this._formData.occupancy || ''}" placeholder="Owner Occupied, Vacant, Tenant">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Availability</label>
+                        <input type="text" class="input" id="availability" value="${this._formData.availability || ''}" placeholder="Immediate, 30 Days, 60 Days">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">School District</label>
+                        <input type="text" class="input" id="schoolDistrict" value="${this._formData.schoolDistrict || ''}" placeholder="District Name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
                         <label class="label">Zoning</label>
                         <input type="text" class="input" id="zoning" value="${this._formData.zoning || ''}" placeholder="Residential, Commercial">
+                    </div>
+                    
+                    <div class="form-group">
+                        <!-- Empty for layout -->
                     </div>
                 </div>
             </div>
@@ -1306,6 +1373,12 @@ class RealEstateDashboard extends HTMLElement {
                 <div class="form-group">
                     <label class="label">SEO Keywords</label>
                     <input type="text" class="input" id="seoKeywords" value="${this._formData.seoKeywords || ''}" placeholder="keyword1, keyword2, keyword3">
+                </div>
+                
+                <div class="form-group">
+                    <label class="label">SEO Open Graph Image URL</label>
+                    <input type="url" class="input" id="seoOgImage" value="${this._formData.seoOgImage || ''}" placeholder="https://example.com/image.jpg">
+                    <div class="help-text">Image URL for social media sharing (Facebook, Twitter, LinkedIn)</div>
                 </div>
             </div>
         `;
@@ -1384,6 +1457,7 @@ class RealEstateDashboard extends HTMLElement {
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
+            .replace(/^-+|-+$/g, '')  // Remove leading and trailing hyphens
             .substring(0, 100);
     }
     
@@ -1467,13 +1541,21 @@ class RealEstateDashboard extends HTMLElement {
             heating: formBody.querySelector('#heating')?.value.trim() || '',
             cooling: formBody.querySelector('#cooling')?.value.trim() || '',
             flooring: formBody.querySelector('#flooring')?.value.trim() || '',
+            foundation: formBody.querySelector('#foundation')?.value.trim() || '',
+            roof: formBody.querySelector('#roof')?.value.trim() || '',
+            exteriorMaterial: formBody.querySelector('#exteriorMaterial')?.value.trim() || '',
+            appliances: formBody.querySelector('#appliances')?.value.trim() || '',
+            utilities: formBody.querySelector('#utilities')?.value.trim() || '',
+            occupancy: formBody.querySelector('#occupancy')?.value.trim() || '',
+            availability: formBody.querySelector('#availability')?.value.trim() || '',
             schoolDistrict: formBody.querySelector('#schoolDistrict')?.value.trim() || '',
             zoning: formBody.querySelector('#zoning')?.value.trim() || '',
             
             // SEO
             seoTitle: formBody.querySelector('#seoTitle')?.value.trim() || '',
             seoDescription: formBody.querySelector('#seoDescription')?.value.trim() || '',
-            seoKeywords: formBody.querySelector('#seoKeywords')?.value.trim() || ''
+            seoKeywords: formBody.querySelector('#seoKeywords')?.value.trim() || '',
+            seoOgImage: formBody.querySelector('#seoOgImage')?.value.trim() || ''
         };
         
         return data;
@@ -1615,13 +1697,15 @@ class RealEstateDashboard extends HTMLElement {
     _updateStats() {
         this._shadow.getElementById('totalListings').textContent = this._totalListings;
         
-        const forSale = this._listings.filter(l => l.listingType === 'sale').length;
-        const forRent = this._listings.filter(l => l.listingType === 'rent').length;
-        const featured = this._listings.filter(l => l.isFeatured).length;
-        
-        this._shadow.getElementById('forSale').textContent = forSale;
-        this._shadow.getElementById('forRent').textContent = forRent;
-        this._shadow.getElementById('featured').textContent = featured;
+        // Count from ALL listings (not just current page)
+        // We need to dispatch an event to get counts from backend
+        this._dispatchEvent('get-listing-counts', {});
+    }
+    
+    setListingCounts(counts) {
+        this._shadow.getElementById('forSale').textContent = counts.forSale || 0;
+        this._shadow.getElementById('forRent').textContent = counts.forRent || 0;
+        this._shadow.getElementById('featured').textContent = counts.featured || 0;
     }
     
     _showToast(type, message) {
