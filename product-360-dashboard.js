@@ -37,7 +37,7 @@ class Product360Dashboard extends HTMLElement {
                 const notification = JSON.parse(newValue);
                 this._showToast(notification.type, notification.message);
                 if (notification.type === 'success') {
-                    this._hideProcessingModal();
+                    this._hideModal();
                 }
             } catch (e) {
                 console.error('🎥 Dashboard: Notification error:', e);
@@ -183,6 +183,11 @@ class Product360Dashboard extends HTMLElement {
                 }
                 
                 .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                .btn:disabled {
+                    opacity: 0.6;
+                    cursor: not-allowed;
+                    transform: none;
+                }
                 
                 .btn-primary { background: #8b5cf6; color: white; }
                 .btn-warning { background: #f59e0b; color: white; }
@@ -206,10 +211,10 @@ class Product360Dashboard extends HTMLElement {
                 .modal-content {
                     background: white;
                     border-radius: 20px;
-                    max-width: 600px;
+                    max-width: 700px;
                     width: 90%;
                     max-height: 90vh;
-                    overflow: hidden;
+                    overflow-y: auto;
                 }
                 
                 .modal-header {
@@ -289,18 +294,18 @@ class Product360Dashboard extends HTMLElement {
                 
                 .progress-bar-bg {
                     width: 100%;
-                    height: 8px;
+                    height: 12px;
                     background: #f3f4f6;
-                    border-radius: 4px;
+                    border-radius: 6px;
                     overflow: hidden;
-                    margin-top: 8px;
+                    margin-top: 12px;
                 }
                 
                 .progress-bar {
                     height: 100%;
                     background: linear-gradient(90deg, #8b5cf6, #7c3aed);
                     width: 0%;
-                    transition: width 0.3s;
+                    transition: width 0.3s ease;
                 }
                 
                 .preview-grid {
@@ -326,6 +331,28 @@ class Product360Dashboard extends HTMLElement {
                     width: 100%;
                     height: 100%;
                     object-fit: cover;
+                }
+                
+                .warning-box {
+                    background: #fef3c7;
+                    border: 2px solid #f59e0b;
+                    border-radius: 12px;
+                    padding: 16px;
+                    margin-top: 16px;
+                    display: none;
+                }
+                
+                .warning-box.active { display: block; }
+                
+                .warning-box strong {
+                    color: #92400e;
+                    font-size: 15px;
+                }
+                
+                .warning-box p {
+                    color: #78350f;
+                    margin-top: 8px;
+                    font-size: 13px;
                 }
                 
                 .modal-footer {
@@ -474,11 +501,17 @@ class Product360Dashboard extends HTMLElement {
                         </div>
                         
                         <div class="progress-section" id="progressSection">
-                            <div style="margin-bottom: 8px; font-weight: 600;" id="progressLabel">Processing...</div>
+                            <div style="margin-bottom: 8px; font-weight: 600; font-size: 16px;" id="progressLabel">Processing...</div>
                             <div class="progress-bar-bg">
                                 <div class="progress-bar" id="progressBar"></div>
                             </div>
-                            <div style="margin-top: 12px; color: #6b7280; font-size: 13px;" id="progressStatus">Initializing...</div>
+                            <div style="margin-top: 12px; color: #6b7280; font-size: 14px;" id="progressStatus">Initializing...</div>
+                            
+                            <div class="warning-box" id="warningBox">
+                                <strong>⚠️ Upload in Progress</strong>
+                                <p>Please do not close this tab or navigate away until the upload is complete.</p>
+                            </div>
+                            
                             <div class="preview-grid" id="previewGrid" style="display: none;"></div>
                         </div>
                     </div>
@@ -486,7 +519,7 @@ class Product360Dashboard extends HTMLElement {
                     <div class="modal-footer">
                         <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelBtn">Cancel</button>
                         <button class="btn btn-primary" id="processBtn" disabled>Extract Frames</button>
-                        <button class="btn" style="background: #10b981; color: white; display: none;" id="uploadBtn">Upload</button>
+                        <button class="btn" style="background: #10b981; color: white; display: none;" id="uploadBtn">Upload to Media Manager</button>
                     </div>
                 </div>
             </div>
@@ -612,18 +645,20 @@ class Product360Dashboard extends HTMLElement {
         const processBtn = this._shadow.getElementById('processBtn');
         const uploadBtn = this._shadow.getElementById('uploadBtn');
         const previewGrid = this._shadow.getElementById('previewGrid');
+        const warningBox = this._shadow.getElementById('warningBox');
         
         // Show upload section, hide progress
         uploadSection.style.display = 'block';
         progressSection.classList.remove('active');
         progressSection.style.display = 'none';
+        warningBox.classList.remove('active');
         
         // Reset buttons
         processBtn.style.display = 'inline-block';
         processBtn.disabled = true;
         uploadBtn.style.display = 'none';
         uploadBtn.disabled = false;
-        uploadBtn.textContent = 'Upload';
+        uploadBtn.textContent = 'Upload to Media Manager';
         
         // Clear preview
         previewGrid.innerHTML = '';
@@ -670,7 +705,9 @@ class Product360Dashboard extends HTMLElement {
         const processBtn = this._shadow.getElementById('processBtn');
         const uploadBtn = this._shadow.getElementById('uploadBtn');
         
+        // Show progress section
         uploadSection.style.display = 'none';
+        progressSection.style.display = 'block';
         progressSection.classList.add('active');
         processBtn.style.display = 'none';
         
@@ -678,6 +715,7 @@ class Product360Dashboard extends HTMLElement {
         const quality = parseFloat(this._shadow.getElementById('quality').value);
         
         try {
+            console.log('🎥 Dashboard: Creating video element...');
             const video = document.createElement('video');
             video.src = URL.createObjectURL(this._videoFile);
             
@@ -685,6 +723,9 @@ class Product360Dashboard extends HTMLElement {
                 video.onloadedmetadata = resolve;
                 video.onerror = reject;
             });
+            
+            console.log('🎥 Dashboard: Video loaded. Duration:', video.duration, 'seconds');
+            console.log('🎥 Dashboard: Video dimensions:', video.videoWidth, 'x', video.videoHeight);
             
             const canvas = document.createElement('canvas');
             canvas.width = video.videoWidth;
@@ -698,11 +739,15 @@ class Product360Dashboard extends HTMLElement {
             
             const interval = video.duration / frameCount;
             
+            console.log('🎥 Dashboard: Starting frame extraction...');
+            
             for (let i = 0; i < frameCount; i++) {
                 const time = i * interval;
                 const progress = ((i + 1) / frameCount) * 100;
                 
-                this._updateProgress(progress, `Extracting frame ${i + 1}/${frameCount}`);
+                console.log(`🎥 Dashboard: Extracting frame ${i + 1}/${frameCount} at ${time.toFixed(2)}s`);
+                
+                this._updateProgress(progress, `Extracting frame ${i + 1} of ${frameCount}...`);
                 
                 video.currentTime = time;
                 await new Promise(resolve => { video.onseeked = resolve; });
@@ -720,6 +765,7 @@ class Product360Dashboard extends HTMLElement {
                 };
                 this._extractedFrames.push(frameData);
                 
+                // Add to preview
                 const preview = document.createElement('div');
                 preview.className = 'preview-frame';
                 preview.innerHTML = `<img src="${frameData.dataUrl}" alt="Frame ${i + 1}">`;
@@ -728,12 +774,14 @@ class Product360Dashboard extends HTMLElement {
             
             URL.revokeObjectURL(video.src);
             
-            this._updateProgress(100, 'Extraction complete!');
+            console.log('🎥 Dashboard: ✅ Extraction complete!', this._extractedFrames.length, 'frames');
+            
+            this._updateProgress(100, `✅ Successfully extracted ${frameCount} frames!`);
             uploadBtn.style.display = 'block';
             
         } catch (error) {
-            console.error('Processing error:', error);
-            this._showToast('error', 'Failed to process video');
+            console.error('🎥 Dashboard: Processing error:', error);
+            this._showToast('error', 'Failed to process video: ' + error.message);
             this._hideModal();
         }
     }
@@ -741,49 +789,47 @@ class Product360Dashboard extends HTMLElement {
     async _uploadFrames() {
         console.log('🎥 Dashboard: ═══════════════════════════════════════');
         console.log('🎥 Dashboard: _uploadFrames called');
-        console.log('🎥 Dashboard: Selected product:', this._selectedProduct);
-        console.log('🎥 Dashboard: Extracted frames count:', this._extractedFrames.length);
         
         if (!this._selectedProduct || this._extractedFrames.length === 0) {
-            console.error('🎥 Dashboard: Missing data - product or frames');
+            console.error('🎥 Dashboard: Missing data');
             return;
         }
         
         const uploadBtn = this._shadow.getElementById('uploadBtn');
+        const warningBox = this._shadow.getElementById('warningBox');
+        const cancelBtn = this._shadow.getElementById('cancelBtn');
+        const closeBtn = this._shadow.getElementById('closeModal');
+        
+        // Disable buttons and show warning
         uploadBtn.disabled = true;
         uploadBtn.textContent = 'Uploading...';
+        cancelBtn.disabled = true;
+        closeBtn.disabled = true;
+        warningBox.classList.add('active');
         
-        this._updateProgress(0, 'Preparing frames for upload...');
+        this._updateProgress(5, 'Preparing frames for upload...');
         
         try {
             console.log('🎥 Dashboard: Converting frames to base64...');
             
             const framesData = await Promise.all(
                 this._extractedFrames.map(async (frame, index) => {
-                    console.log('🎥 Dashboard: Converting frame', index + 1);
-                    
                     const reader = new FileReader();
                     return new Promise((resolve) => {
                         reader.onloadend = () => {
                             const base64Data = reader.result.split(',')[1];
-                            console.log('🎥 Dashboard: Frame', index + 1, 'converted. Size:', base64Data.length, 'chars');
-                            
                             resolve({
                                 data: base64Data,
                                 index: index,
                                 filename: `frame-${String(index + 1).padStart(3, '0')}.webp`
                             });
                         };
-                        reader.onerror = (error) => {
-                            console.error('🎥 Dashboard: Error reading frame', index + 1, ':', error);
-                            resolve(null);
-                        };
+                        reader.onerror = () => resolve(null);
                         reader.readAsDataURL(frame.blob);
                     });
                 })
             );
             
-            // Filter out any failed conversions
             const validFrames = framesData.filter(f => f !== null);
             console.log('🎥 Dashboard: Valid frames ready:', validFrames.length);
             
@@ -791,12 +837,9 @@ class Product360Dashboard extends HTMLElement {
                 throw new Error('No valid frames to upload');
             }
             
-            this._updateProgress(10, 'Sending to backend...');
+            this._updateProgress(10, 'Uploading to Media Manager...');
             
             console.log('🎥 Dashboard: Dispatching upload-frames event');
-            console.log('🎥 Dashboard: Product ID:', this._selectedProduct.id);
-            console.log('🎥 Dashboard: Product Name:', this._selectedProduct.name);
-            console.log('🎥 Dashboard: Frames to upload:', validFrames.length);
             
             this._dispatchEvent('upload-frames', {
                 frames: validFrames,
@@ -804,39 +847,50 @@ class Product360Dashboard extends HTMLElement {
                 productName: this._selectedProduct.name
             });
             
-            console.log('🎥 Dashboard: Event dispatched successfully');
+            console.log('🎥 Dashboard: Event dispatched');
             console.log('🎥 Dashboard: ═══════════════════════════════════════');
             
         } catch (error) {
-            console.error('🎥 Dashboard: ═══════════════════════════════════════');
-            console.error('🎥 Dashboard: Upload preparation error:', error);
-            console.error('🎥 Dashboard: Error message:', error.message);
-            console.error('🎥 Dashboard: Error stack:', error.stack);
-            console.error('🎥 Dashboard: ═══════════════════════════════════════');
-            
+            console.error('🎥 Dashboard: Upload error:', error);
             this._showToast('error', 'Failed to prepare upload: ' + error.message);
+            
+            // Re-enable buttons
             uploadBtn.disabled = false;
-            uploadBtn.textContent = 'Upload';
+            uploadBtn.textContent = 'Upload to Media Manager';
+            cancelBtn.disabled = false;
+            closeBtn.disabled = false;
+            warningBox.classList.remove('active');
         }
     }
     
     _updateProgress(percent, label) {
-        this._shadow.getElementById('progressBar').style.width = percent + '%';
-        this._shadow.getElementById('progressLabel').textContent = label;
-        this._shadow.getElementById('progressStatus').textContent = Math.round(percent) + '%';
+        const progressBar = this._shadow.getElementById('progressBar');
+        const progressLabel = this._shadow.getElementById('progressLabel');
+        const progressStatus = this._shadow.getElementById('progressStatus');
+        
+        if (progressBar) progressBar.style.width = percent + '%';
+        if (progressLabel) progressLabel.textContent = label;
+        if (progressStatus) progressStatus.textContent = Math.round(percent) + '%';
     }
     
     _updateUploadProgress(progress) {
-        if (progress.status === 'complete') {
-            this._updateProgress(100, 'Upload Complete!');
-            setTimeout(() => this._hideModal(), 1500);
+        const warningBox = this._shadow.getElementById('warningBox');
+        
+        if (progress.status === 'uploading') {
+            this._updateProgress(progress.progress || 50, progress.message || 'Uploading...');
+            warningBox.classList.add('active');
+        } else if (progress.status === 'complete') {
+            this._updateProgress(100, '✅ Upload Complete!');
+            warningBox.classList.remove('active');
+            setTimeout(() => this._hideModal(), 2000);
         } else if (progress.status === 'error') {
-            this._hideModal();
+            warningBox.classList.remove('active');
+            this._showToast('error', progress.message || 'Upload failed');
         }
     }
     
     _delete360(product, data360) {
-        if (!confirm(`Delete 360° view for "${product.name}"?`)) return;
+        if (!confirm(`Delete 360° view for "${product.name}"?\n\nThis will permanently delete the folder and all frames.`)) return;
         
         this._dispatchEvent('delete-360', {
             product: product,
