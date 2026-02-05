@@ -510,20 +510,22 @@ class Product360Dashboard extends HTMLElement {
                         </div>
                         
                         <div class="progress-section" id="progressSection">
-                            <div style="margin-bottom: 8px; font-weight: 600; font-size: 16px;" id="progressLabel">Processing...</div>
-                            <div class="progress-bar-bg">
-                                <div class="progress-bar" id="progressBar"></div>
-                            </div>
-                            <div style="margin-top: 12px; color: #6b7280; font-size: 14px;" id="progressStatus">Initializing...</div>
-                            
-                            <div class="warning-box" id="warningBox">
-                                <strong>⚠️ Upload in Progress</strong>
-                                <p>Please do not close this tab or navigate away until the upload is complete.</p>
-                            </div>
-                            
-                            <div class="preview-grid" id="previewGrid" style="display: none;"></div>
-                        </div>
-                    </div>
+    <div style="margin-bottom: 8px; font-weight: 600; font-size: 16px;" id="progressLabel">Processing...</div>
+    <div class="progress-bar-bg">
+        <div class="progress-bar" id="progressBar"></div>
+    </div>
+    <div style="margin-top: 12px; color: #6b7280; font-size: 14px; display: flex; justify-content: space-between; align-items: center;">
+        <span id="progressStatus">Initializing...</span>
+        <span id="frameCounter" style="font-weight: 600;"></span>
+    </div>
+    
+    <div class="warning-box" id="warningBox">
+        <strong>⚠️ Upload in Progress</strong>
+        <p>Please do not close this tab or navigate away until the upload is complete.</p>
+    </div>
+    
+    <div class="preview-grid" id="previewGrid" style="display: none;"></div>
+</div>
                     
                     <div class="modal-footer">
                         <button class="btn" style="background: #f3f4f6; color: #111827;" id="cancelBtn">Cancel</button>
@@ -883,20 +885,61 @@ class Product360Dashboard extends HTMLElement {
     }
     
     _updateUploadProgress(progress) {
-        const warningBox = this._shadow.getElementById('warningBox');
-        
-        if (progress.status === 'uploading') {
-            this._updateProgress(progress.progress || 50, progress.message || 'Uploading...');
-            warningBox.classList.add('active');
-        } else if (progress.status === 'complete') {
-            this._updateProgress(100, '✅ Upload Complete!');
-            warningBox.classList.remove('active');
-            setTimeout(() => this._hideModal(), 2000);
-        } else if (progress.status === 'error') {
-            warningBox.classList.remove('active');
-            this._showToast('error', progress.message || 'Upload failed');
+    const progressBar = this._shadow.getElementById('progressBar');
+    const progressLabel = this._shadow.getElementById('progressLabel');
+    const progressStatus = this._shadow.getElementById('progressStatus');
+    
+    if (progress.status === 'uploading') {
+        // Update progress bar
+        if (progressBar) {
+            progressBar.style.width = progress.progress + '%';
         }
+        
+        // Update label with frame count
+        if (progressLabel) {
+            if (progress.current && progress.total) {
+                progressLabel.textContent = `${progress.message} (${progress.current}/${progress.total})`;
+            } else {
+                progressLabel.textContent = progress.message || 'Uploading...';
+            }
+        }
+        
+        // Update percentage
+        if (progressStatus) {
+            progressStatus.textContent = Math.round(progress.progress) + '%';
+        }
+        
+        const warningBox = this._shadow.getElementById('warningBox');
+        if (warningBox) {
+            warningBox.classList.add('active');
+        }
+        
+    } else if (progress.status === 'complete') {
+        if (progressBar) {
+            progressBar.style.width = '100%';
+        }
+        if (progressLabel) {
+            progressLabel.textContent = '✅ Upload Complete!';
+        }
+        if (progressStatus) {
+            progressStatus.textContent = '100%';
+        }
+        
+        const warningBox = this._shadow.getElementById('warningBox');
+        if (warningBox) {
+            warningBox.classList.remove('active');
+        }
+        
+        setTimeout(() => this._hideModal(), 2000);
+        
+    } else if (progress.status === 'error') {
+        const warningBox = this._shadow.getElementById('warningBox');
+        if (warningBox) {
+            warningBox.classList.remove('active');
+        }
+        this._showToast('error', progress.message || 'Upload failed');
     }
+}
     
     _delete360(product, data360) {
         if (!confirm(`Delete 360° view for "${product.name}"?\n\nThis will permanently delete the folder and all frames.`)) return;
