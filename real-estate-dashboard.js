@@ -766,8 +766,11 @@ class RealEstateDashboard extends HTMLElement {
             if (listing.listingType === 'rent') badges.push('<span class="badge badge-rent">For Rent</span>');
             if (listing.isFeatured) badges.push('<span class="badge badge-featured">⭐ Featured</span>');
             
+            // Convert Wix image URL to WixStatic URL
+            const imageUrl = this._convertWixImageUrl(listing.thumbnailImage);
+            
             card.innerHTML = `
-                <img src="${listing.thumbnailImage || 'https://via.placeholder.com/400x300'}" alt="${listing.title}" class="card-img">
+                <img src="${imageUrl}" alt="${listing.title}" class="card-img">
                 <div class="card-body">
                     <div class="card-badges">${badges.join('')}</div>
                     <div class="card-title">${listing.title}</div>
@@ -831,11 +834,13 @@ class RealEstateDashboard extends HTMLElement {
         // Render form
         this._renderForm();
         
-        // Load related listings options
-        this._loadRelatedListingsOptions();
-        
         // Show modal
         this._shadow.getElementById('modal').classList.add('active');
+        
+        // Load related listings options AFTER modal is shown and form is rendered
+        setTimeout(() => {
+            this._loadRelatedListingsOptions();
+        }, 100);
     }
     
     _renderForm() {
@@ -921,7 +926,7 @@ class RealEstateDashboard extends HTMLElement {
                         </div>
                     </label>
                     <div class="file-preview" id="thumbnailPreview">
-                        ${this._formData.thumbnailImage ? `<img src="${this._formData.thumbnailImage}" class="preview-img">` : ''}
+                        ${this._formData.thumbnailImage ? `<img src="${this._convertWixImageUrl(this._formData.thumbnailImage)}" class="preview-img">` : ''}
                     </div>
                 </div>
                 
@@ -1040,6 +1045,26 @@ class RealEstateDashboard extends HTMLElement {
                         🏗️ New Construction
                     </label>
                     <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isForeclosure" ${this._formData.isForeclosure ? 'checked' : ''}>
+                        🏦 Foreclosure
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isShortSale" ${this._formData.isShortSale ? 'checked' : ''}>
+                        💰 Short Sale
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isPriceReduced" ${this._formData.isPriceReduced ? 'checked' : ''}>
+                        📉 Price Reduced
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isOpenHouse" ${this._formData.isOpenHouse ? 'checked' : ''}>
+                        🏡 Open House
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isVirtualTour" ${this._formData.isVirtualTour ? 'checked' : ''}>
+                        🎥 Virtual Tour Available
+                    </label>
+                    <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasPool" ${this._formData.hasPool ? 'checked' : ''}>
                         🏊 Pool
                     </label>
@@ -1050,6 +1075,10 @@ class RealEstateDashboard extends HTMLElement {
                     <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasBasement" ${this._formData.hasBasement ? 'checked' : ''}>
                         🏠 Basement
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasAttic" ${this._formData.hasAttic ? 'checked' : ''}>
+                        🏚️ Attic
                     </label>
                     <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasFireplace" ${this._formData.hasFireplace ? 'checked' : ''}>
@@ -1096,6 +1125,22 @@ class RealEstateDashboard extends HTMLElement {
                         👔 Walk-in Closet
                     </label>
                     <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasMasterSuite" ${this._formData.hasMasterSuite ? 'checked' : ''}>
+                        🛏️ Master Suite
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasLaundryRoom" ${this._formData.hasLaundryRoom ? 'checked' : ''}>
+                        🧺 Laundry Room
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPantry" ${this._formData.hasPantry ? 'checked' : ''}>
+                        🥫 Pantry
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasOffice" ${this._formData.hasOffice ? 'checked' : ''}>
+                        💼 Home Office
+                    </label>
+                    <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasSecurity" ${this._formData.hasSecurity ? 'checked' : ''}>
                         🔒 Security System
                     </label>
@@ -1112,6 +1157,14 @@ class RealEstateDashboard extends HTMLElement {
                         💪 Gym
                     </label>
                     <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasWinecellar" ${this._formData.hasWinecellar ? 'checked' : ''}>
+                        🍷 Wine Cellar
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasElevator" ${this._formData.hasElevator ? 'checked' : ''}>
+                        🛗 Elevator
+                    </label>
+                    <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasPetFriendly" ${this._formData.hasPetFriendly ? 'checked' : ''}>
                         🐕 Pet Friendly
                     </label>
@@ -1120,12 +1173,60 @@ class RealEstateDashboard extends HTMLElement {
                         🚧 Gated Community
                     </label>
                     <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasClubhouse" ${this._formData.hasClubhouse ? 'checked' : ''}>
+                        🏛️ Clubhouse
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPlayground" ${this._formData.hasPlayground ? 'checked' : ''}>
+                        🎪 Playground
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasTennisaccess" ${this._formData.hasTennisaccess ? 'checked' : ''}>
+                        🎾 Tennis Courts
+                    </label>
+                    <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasWaterfront" ${this._formData.hasWaterfront ? 'checked' : ''}>
                         🌊 Waterfront
                     </label>
                     <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGolfCourse" ${this._formData.hasGolfCourse ? 'checked' : ''}>
+                        ⛳ Golf Course Access
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasMountainView" ${this._formData.hasMountainView ? 'checked' : ''}>
+                        ⛰️ Mountain View
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasCityView" ${this._formData.hasCityView ? 'checked' : ''}>
+                        🏙️ City View
+                    </label>
+                    <label class="checkbox-label">
                         <input type="checkbox" class="checkbox" id="hasOceanView" ${this._formData.hasOceanView ? 'checked' : ''}>
                         🌅 Ocean View
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPrivateBeach" ${this._formData.hasPrivateBeach ? 'checked' : ''}>
+                        🏖️ Private Beach
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasBoatDock" ${this._formData.hasBoatDock ? 'checked' : ''}>
+                        ⛵ Boat Dock
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGuestHouse" ${this._formData.hasGuestHouse ? 'checked' : ''}>
+                        🏠 Guest House
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasInLawSuite" ${this._formData.hasInLawSuite ? 'checked' : ''}>
+                        👵 In-Law Suite
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasHandicapAccessible" ${this._formData.hasHandicapAccessible ? 'checked' : ''}>
+                        ♿ Handicap Accessible
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasRentToOwn" ${this._formData.hasRentToOwn ? 'checked' : ''}>
+                        🏡 Rent to Own Option
                     </label>
                 </div>
             </div>
@@ -1211,6 +1312,14 @@ class RealEstateDashboard extends HTMLElement {
         
         // Set up file input listeners
         this._setupFormListeners();
+        
+        // Set currency value after render
+        setTimeout(() => {
+            const currencySelect = this._shadow.getElementById('currency');
+            if (currencySelect) {
+                currencySelect.value = this._formData.currency || '$';
+            }
+        }, 0);
     }
     
     _setupFormListeners() {
@@ -1306,9 +1415,15 @@ class RealEstateDashboard extends HTMLElement {
             // Checkboxes
             isFeatured: formBody.querySelector('#isFeatured')?.checked || false,
             isNewConstruction: formBody.querySelector('#isNewConstruction')?.checked || false,
+            isForeclosure: formBody.querySelector('#isForeclosure')?.checked || false,
+            isShortSale: formBody.querySelector('#isShortSale')?.checked || false,
+            isPriceReduced: formBody.querySelector('#isPriceReduced')?.checked || false,
+            isOpenHouse: formBody.querySelector('#isOpenHouse')?.checked || false,
+            isVirtualTour: formBody.querySelector('#isVirtualTour')?.checked || false,
             hasPool: formBody.querySelector('#hasPool')?.checked || false,
             hasGarage: formBody.querySelector('#hasGarage')?.checked || false,
             hasBasement: formBody.querySelector('#hasBasement')?.checked || false,
+            hasAttic: formBody.querySelector('#hasAttic')?.checked || false,
             hasFireplace: formBody.querySelector('#hasFireplace')?.checked || false,
             hasBalcony: formBody.querySelector('#hasBalcony')?.checked || false,
             hasGarden: formBody.querySelector('#hasGarden')?.checked || false,
@@ -1320,14 +1435,32 @@ class RealEstateDashboard extends HTMLElement {
             hasUpdatedBathroom: formBody.querySelector('#hasUpdatedBathroom')?.checked || false,
             hasHardwoodFloors: formBody.querySelector('#hasHardwoodFloors')?.checked || false,
             hasWalkInCloset: formBody.querySelector('#hasWalkInCloset')?.checked || false,
+            hasMasterSuite: formBody.querySelector('#hasMasterSuite')?.checked || false,
+            hasLaundryRoom: formBody.querySelector('#hasLaundryRoom')?.checked || false,
+            hasPantry: formBody.querySelector('#hasPantry')?.checked || false,
+            hasOffice: formBody.querySelector('#hasOffice')?.checked || false,
             hasSecurity: formBody.querySelector('#hasSecurity')?.checked || false,
             hasSolarPanels: formBody.querySelector('#hasSolarPanels')?.checked || false,
             hasSmartHome: formBody.querySelector('#hasSmartHome')?.checked || false,
             hasGym: formBody.querySelector('#hasGym')?.checked || false,
+            hasWinecellar: formBody.querySelector('#hasWinecellar')?.checked || false,
+            hasElevator: formBody.querySelector('#hasElevator')?.checked || false,
             hasPetFriendly: formBody.querySelector('#hasPetFriendly')?.checked || false,
             hasGatedCommunity: formBody.querySelector('#hasGatedCommunity')?.checked || false,
+            hasClubhouse: formBody.querySelector('#hasClubhouse')?.checked || false,
+            hasPlayground: formBody.querySelector('#hasPlayground')?.checked || false,
+            hasTennisaccess: formBody.querySelector('#hasTennisaccess')?.checked || false,
             hasWaterfront: formBody.querySelector('#hasWaterfront')?.checked || false,
+            hasGolfCourse: formBody.querySelector('#hasGolfCourse')?.checked || false,
+            hasMountainView: formBody.querySelector('#hasMountainView')?.checked || false,
+            hasCityView: formBody.querySelector('#hasCityView')?.checked || false,
             hasOceanView: formBody.querySelector('#hasOceanView')?.checked || false,
+            hasPrivateBeach: formBody.querySelector('#hasPrivateBeach')?.checked || false,
+            hasBoatDock: formBody.querySelector('#hasBoatDock')?.checked || false,
+            hasGuestHouse: formBody.querySelector('#hasGuestHouse')?.checked || false,
+            hasInLawSuite: formBody.querySelector('#hasInLawSuite')?.checked || false,
+            hasHandicapAccessible: formBody.querySelector('#hasHandicapAccessible')?.checked || false,
+            hasRentToOwn: formBody.querySelector('#hasRentToOwn')?.checked || false,
             
             // Additional
             architecture: formBody.querySelector('#architecture')?.value.trim() || '',
@@ -1500,6 +1633,27 @@ class RealEstateDashboard extends HTMLElement {
     
     _formatNumber(num) {
         return new Intl.NumberFormat('en-US').format(num);
+    }
+    
+    _convertWixImageUrl(url) {
+        if (!url) return 'https://via.placeholder.com/400x300';
+        
+        // If already a full URL, return as is
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+        
+        // Convert wix:image:// format to WixStatic URL
+        if (url.startsWith('wix:image://')) {
+            // Extract the image ID from wix:image://v1/{imageId}/{filename}
+            const match = url.match(/wix:image:\/\/v1\/([^\/]+)\//);
+            if (match && match[1]) {
+                const imageId = match[1];
+                return `https://static.wixstatic.com/media/${imageId}`;
+            }
+        }
+        
+        return url;
     }
     
     _getAllCurrencies() {
@@ -1694,12 +1848,15 @@ class RealEstateDashboard extends HTMLElement {
         listings.forEach(listing => {
             const isSelected = selectedIds.includes(listing._id);
             
+            // Convert Wix image URL to WixStatic URL
+            const imageUrl = this._convertWixImageUrl(listing.thumbnailImage);
+            
             const item = document.createElement('label');
             item.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: white; transition: all 0.2s;';
             
             item.innerHTML = `
                 <input type="checkbox" class="checkbox related-checkbox" data-id="${listing._id}" ${isSelected ? 'checked' : ''} style="flex-shrink: 0;">
-                <img src="${listing.thumbnailImage || 'https://via.placeholder.com/60'}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">
+                <img src="${imageUrl}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${listing.title}</div>
                     <div style="font-size: 12px; color: #6b7280;">${listing.location || 'No location'}</div>
