@@ -123,13 +123,22 @@ class Product360Dashboard extends HTMLElement {
                 }
                 
                 .card {
-                    background: white;
-                    border-radius: 16px;
-                    overflow: hidden;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-                    border: 1px solid #e5e7eb;
-                    transition: all 0.3s;
-                }
+    background: white;
+    border-radius: 16px;
+    overflow: hidden;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    border: 1px solid #e5e7eb;
+    transition: all 0.3s;
+    display: flex; /* Add this */
+    flex-direction: column; /* Add this */
+}
+
+.card-body { 
+    padding: 20px; 
+    flex: 1; /* Add this */
+    display: flex; /* Add this */
+    flex-direction: column; /* Add this */
+}
                 
                 .card:hover {
                     box-shadow: 0 20px 25px rgba(0,0,0,0.1);
@@ -137,13 +146,13 @@ class Product360Dashboard extends HTMLElement {
                 }
                 
                 .card-img {
-                    width: 100%;
-                    height: 220px;
-                    object-fit: cover;
-                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
-                }
+    width: 100%;
+    height: 220px;
+    object-fit: cover;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    display: block; /* Add this */
+}
                 
-                .card-body { padding: 20px; }
                 
                 .card-name {
                     font-size: 18px;
