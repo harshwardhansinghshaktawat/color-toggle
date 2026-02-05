@@ -20,7 +20,7 @@ class RealEstateDashboard extends HTMLElement {
     }
     
     static get observedAttributes() {
-        return ['listing-data', 'notification', 'upload-progress'];
+        return ['listing-data', 'all-listings-data', 'notification', 'upload-progress'];
     }
     
     attributeChangedCallback(name, oldValue, newValue) {
@@ -28,6 +28,15 @@ class RealEstateDashboard extends HTMLElement {
             try {
                 const data = JSON.parse(newValue);
                 this.setListings(data);
+            } catch (e) {
+                console.error('🏠 Dashboard: Parse error:', e);
+            }
+        }
+        
+        if (name === 'all-listings-data' && newValue && newValue !== oldValue) {
+            try {
+                const data = JSON.parse(newValue);
+                this.setAllListingsForSelection(data.listings);
             } catch (e) {
                 console.error('🏠 Dashboard: Parse error:', e);
             }
@@ -797,6 +806,10 @@ class RealEstateDashboard extends HTMLElement {
         // Initialize form data
         if (isEdit && listing) {
             this._formData = { ...listing };
+            // Ensure relatedProperties is an array
+            if (!this._formData.relatedProperties) {
+                this._formData.relatedProperties = [];
+            }
         } else {
             this._formData = {
                 title: '',
@@ -806,7 +819,8 @@ class RealEstateDashboard extends HTMLElement {
                 price: '',
                 bedrooms: '',
                 bathrooms: '',
-                squareFootage: ''
+                squareFootage: '',
+                relatedProperties: []
             };
         }
         
@@ -816,6 +830,9 @@ class RealEstateDashboard extends HTMLElement {
         
         // Render form
         this._renderForm();
+        
+        // Load related listings options
+        this._loadRelatedListingsOptions();
         
         // Show modal
         this._shadow.getElementById('modal').classList.add('active');
@@ -847,8 +864,9 @@ class RealEstateDashboard extends HTMLElement {
                 
                 <div class="form-row">
                     <div class="form-group">
-                        <label class="label required">Location</label>
-                        <input type="text" class="input" id="location" value="${this._formData.location || ''}" placeholder="123 Main St, City, State">
+                        <label class="label required">Full Address</label>
+                        <input type="text" class="input" id="location" value="${this._formData.location || ''}" placeholder="123 Main St, City, State ZIP, Country">
+                        <div class="help-text">Enter complete address for Google Maps compatibility (Street, City, State/Province, ZIP/Postal Code, Country)</div>
                     </div>
                     
                     <div class="form-group">
@@ -934,10 +952,7 @@ class RealEstateDashboard extends HTMLElement {
                     <div class="form-group">
                         <label class="label">Currency</label>
                         <select class="select" id="currency">
-                            <option value="$" ${this._formData.currency === '$' ? 'selected' : ''}>USD ($)</option>
-                            <option value="€" ${this._formData.currency === '€' ? 'selected' : ''}>EUR (€)</option>
-                            <option value="£" ${this._formData.currency === '£' ? 'selected' : ''}>GBP (£)</option>
-                            <option value="₹" ${this._formData.currency === '₹' ? 'selected' : ''}>INR (₹)</option>
+                            ${this._getAllCurrencies()}
                         </select>
                     </div>
                     
@@ -1153,6 +1168,21 @@ class RealEstateDashboard extends HTMLElement {
                         <label class="label">Zoning</label>
                         <input type="text" class="input" id="zoning" value="${this._formData.zoning || ''}" placeholder="Residential, Commercial">
                     </div>
+                </div>
+            </div>
+            
+            <!-- Related Listings -->
+            <div class="form-section">
+                <div class="section-title">🔗 Related Listings</div>
+                
+                <div class="form-group">
+                    <label class="label">Related Properties</label>
+                    <div id="relatedListingsContainer" style="border: 2px solid #e5e7eb; border-radius: 8px; padding: 16px; background: #f9fafb; min-height: 200px; max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; color: #6b7280; padding: 40px 20px;">
+                            Loading available listings...
+                        </div>
+                    </div>
+                    <div class="help-text">Select properties that are related or similar to this listing</div>
                 </div>
             </div>
             
@@ -1470,6 +1500,240 @@ class RealEstateDashboard extends HTMLElement {
     
     _formatNumber(num) {
         return new Intl.NumberFormat('en-US').format(num);
+    }
+    
+    _getAllCurrencies() {
+        const currencies = [
+            { code: 'USD', symbol: '$', name: 'US Dollar' },
+            { code: 'EUR', symbol: '€', name: 'Euro' },
+            { code: 'GBP', symbol: '£', name: 'British Pound' },
+            { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+            { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+            { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+            { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
+            { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+            { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
+            { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar' },
+            { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso' },
+            { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+            { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar' },
+            { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone' },
+            { code: 'KRW', symbol: '₩', name: 'South Korean Won' },
+            { code: 'TRY', symbol: '₺', name: 'Turkish Lira' },
+            { code: 'RUB', symbol: '₽', name: 'Russian Ruble' },
+            { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+            { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+            { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
+            { code: 'DKK', symbol: 'kr', name: 'Danish Krone' },
+            { code: 'PLN', symbol: 'zł', name: 'Polish Zloty' },
+            { code: 'TWD', symbol: 'NT$', name: 'Taiwan Dollar' },
+            { code: 'THB', symbol: '฿', name: 'Thai Baht' },
+            { code: 'MYR', symbol: 'RM', name: 'Malaysian Ringgit' },
+            { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah' },
+            { code: 'HUF', symbol: 'Ft', name: 'Hungarian Forint' },
+            { code: 'CZK', symbol: 'Kč', name: 'Czech Koruna' },
+            { code: 'ILS', symbol: '₪', name: 'Israeli Shekel' },
+            { code: 'CLP', symbol: 'CL$', name: 'Chilean Peso' },
+            { code: 'PHP', symbol: '₱', name: 'Philippine Peso' },
+            { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+            { code: 'COP', symbol: 'COL$', name: 'Colombian Peso' },
+            { code: 'SAR', symbol: 'SR', name: 'Saudi Riyal' },
+            { code: 'RON', symbol: 'lei', name: 'Romanian Leu' },
+            { code: 'VND', symbol: '₫', name: 'Vietnamese Dong' },
+            { code: 'ARS', symbol: 'AR$', name: 'Argentine Peso' },
+            { code: 'UAH', symbol: '₴', name: 'Ukrainian Hryvnia' },
+            { code: 'QAR', symbol: 'QR', name: 'Qatari Riyal' },
+            { code: 'KWD', symbol: 'KD', name: 'Kuwaiti Dinar' },
+            { code: 'OMR', symbol: 'OMR', name: 'Omani Rial' },
+            { code: 'BHD', symbol: 'BD', name: 'Bahraini Dinar' },
+            { code: 'JOD', symbol: 'JD', name: 'Jordanian Dinar' },
+            { code: 'EGP', symbol: 'E£', name: 'Egyptian Pound' },
+            { code: 'MAD', symbol: 'MAD', name: 'Moroccan Dirham' },
+            { code: 'PKR', symbol: 'Rs', name: 'Pakistani Rupee' },
+            { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka' },
+            { code: 'LKR', symbol: 'Rs', name: 'Sri Lankan Rupee' },
+            { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling' },
+            { code: 'NGN', symbol: '₦', name: 'Nigerian Naira' },
+            { code: 'GHS', symbol: 'GH₵', name: 'Ghanaian Cedi' },
+            { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling' },
+            { code: 'TZS', symbol: 'TSh', name: 'Tanzanian Shilling' },
+            { code: 'ETB', symbol: 'Br', name: 'Ethiopian Birr' },
+            { code: 'PEN', symbol: 'S/', name: 'Peruvian Sol' },
+            { code: 'VEF', symbol: 'Bs', name: 'Venezuelan Bolívar' },
+            { code: 'BOB', symbol: 'Bs', name: 'Bolivian Boliviano' },
+            { code: 'PYG', symbol: '₲', name: 'Paraguayan Guaraní' },
+            { code: 'UYU', symbol: '$U', name: 'Uruguayan Peso' },
+            { code: 'CRC', symbol: '₡', name: 'Costa Rican Colón' },
+            { code: 'GTQ', symbol: 'Q', name: 'Guatemalan Quetzal' },
+            { code: 'HNL', symbol: 'L', name: 'Honduran Lempira' },
+            { code: 'NIO', symbol: 'C$', name: 'Nicaraguan Córdoba' },
+            { code: 'PAB', symbol: 'B/.', name: 'Panamanian Balboa' },
+            { code: 'DOP', symbol: 'RD$', name: 'Dominican Peso' },
+            { code: 'JMD', symbol: 'J$', name: 'Jamaican Dollar' },
+            { code: 'TTD', symbol: 'TT$', name: 'Trinidad and Tobago Dollar' },
+            { code: 'BBD', symbol: 'Bds$', name: 'Barbadian Dollar' },
+            { code: 'BSD', symbol: 'B$', name: 'Bahamian Dollar' },
+            { code: 'BZD', symbol: 'BZ$', name: 'Belize Dollar' },
+            { code: 'XCD', symbol: 'EC$', name: 'East Caribbean Dollar' },
+            { code: 'ISK', symbol: 'kr', name: 'Icelandic Króna' },
+            { code: 'BGN', symbol: 'лв', name: 'Bulgarian Lev' },
+            { code: 'HRK', symbol: 'kn', name: 'Croatian Kuna' },
+            { code: 'RSD', symbol: 'din', name: 'Serbian Dinar' },
+            { code: 'MKD', symbol: 'ден', name: 'Macedonian Denar' },
+            { code: 'BAM', symbol: 'KM', name: 'Bosnia-Herzegovina Convertible Mark' },
+            { code: 'ALL', symbol: 'L', name: 'Albanian Lek' },
+            { code: 'MDL', symbol: 'L', name: 'Moldovan Leu' },
+            { code: 'GEL', symbol: '₾', name: 'Georgian Lari' },
+            { code: 'AMD', symbol: '֏', name: 'Armenian Dram' },
+            { code: 'AZN', symbol: '₼', name: 'Azerbaijani Manat' },
+            { code: 'KZT', symbol: '₸', name: 'Kazakhstani Tenge' },
+            { code: 'UZS', symbol: 'soʻm', name: 'Uzbekistani Som' },
+            { code: 'KGS', symbol: 'с', name: 'Kyrgyzstani Som' },
+            { code: 'TJS', symbol: 'ЅМ', name: 'Tajikistani Somoni' },
+            { code: 'TMT', symbol: 'm', name: 'Turkmenistan Manat' },
+            { code: 'AFN', symbol: '؋', name: 'Afghan Afghani' },
+            { code: 'IQD', symbol: 'ID', name: 'Iraqi Dinar' },
+            { code: 'LBP', symbol: 'LL', name: 'Lebanese Pound' },
+            { code: 'SYP', symbol: 'LS', name: 'Syrian Pound' },
+            { code: 'YER', symbol: 'YR', name: 'Yemeni Rial' },
+            { code: 'MNT', symbol: '₮', name: 'Mongolian Tögrög' },
+            { code: 'MMK', symbol: 'K', name: 'Myanmar Kyat' },
+            { code: 'KHR', symbol: '៛', name: 'Cambodian Riel' },
+            { code: 'LAK', symbol: '₭', name: 'Lao Kip' },
+            { code: 'NPR', symbol: 'Rs', name: 'Nepalese Rupee' },
+            { code: 'BTN', symbol: 'Nu', name: 'Bhutanese Ngultrum' },
+            { code: 'MVR', symbol: 'Rf', name: 'Maldivian Rufiyaa' },
+            { code: 'BND', symbol: 'B$', name: 'Brunei Dollar' },
+            { code: 'FJD', symbol: 'FJ$', name: 'Fijian Dollar' },
+            { code: 'PGK', symbol: 'K', name: 'Papua New Guinean Kina' },
+            { code: 'WST', symbol: 'WS$', name: 'Samoan Tālā' },
+            { code: 'TOP', symbol: 'T$', name: 'Tongan Paʻanga' },
+            { code: 'VUV', symbol: 'VT', name: 'Vanuatu Vatu' },
+            { code: 'SBD', symbol: 'SI$', name: 'Solomon Islands Dollar' },
+            { code: 'SCR', symbol: 'SR', name: 'Seychellois Rupee' },
+            { code: 'MUR', symbol: 'Rs', name: 'Mauritian Rupee' },
+            { code: 'MWK', symbol: 'MK', name: 'Malawian Kwacha' },
+            { code: 'ZMW', symbol: 'ZK', name: 'Zambian Kwacha' },
+            { code: 'BWP', symbol: 'P', name: 'Botswana Pula' },
+            { code: 'NAD', symbol: 'N$', name: 'Namibian Dollar' },
+            { code: 'SZL', symbol: 'L', name: 'Swazi Lilangeni' },
+            { code: 'LSL', symbol: 'L', name: 'Lesotho Loti' },
+            { code: 'AOA', symbol: 'Kz', name: 'Angolan Kwanza' },
+            { code: 'MZN', symbol: 'MT', name: 'Mozambican Metical' },
+            { code: 'MGA', symbol: 'Ar', name: 'Malagasy Ariary' },
+            { code: 'TND', symbol: 'DT', name: 'Tunisian Dinar' },
+            { code: 'DZD', symbol: 'DA', name: 'Algerian Dinar' },
+            { code: 'LYD', symbol: 'LD', name: 'Libyan Dinar' },
+            { code: 'SDG', symbol: 'SDG', name: 'Sudanese Pound' },
+            { code: 'RWF', symbol: 'FRw', name: 'Rwandan Franc' },
+            { code: 'BIF', symbol: 'FBu', name: 'Burundian Franc' },
+            { code: 'DJF', symbol: 'Fdj', name: 'Djiboutian Franc' },
+            { code: 'SOS', symbol: 'Sh', name: 'Somali Shilling' },
+            { code: 'GMD', symbol: 'D', name: 'Gambian Dalasi' },
+            { code: 'SLL', symbol: 'Le', name: 'Sierra Leonean Leone' },
+            { code: 'LRD', symbol: 'L$', name: 'Liberian Dollar' },
+            { code: 'GNF', symbol: 'FG', name: 'Guinean Franc' },
+            { code: 'CVE', symbol: '$', name: 'Cape Verdean Escudo' },
+            { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc' },
+            { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc' },
+            { code: 'KMF', symbol: 'CF', name: 'Comorian Franc' },
+            { code: 'CDF', symbol: 'FC', name: 'Congolese Franc' },
+            { code: 'STN', symbol: 'Db', name: 'São Tomé and Príncipe Dobra' },
+            { code: 'ERN', symbol: 'Nfk', name: 'Eritrean Nakfa' },
+            { code: 'SHP', symbol: '£', name: 'Saint Helena Pound' },
+            { code: 'GIP', symbol: '£', name: 'Gibraltar Pound' },
+            { code: 'FKP', symbol: '£', name: 'Falkland Islands Pound' },
+            { code: 'KYD', symbol: 'CI$', name: 'Cayman Islands Dollar' },
+            { code: 'BMD', symbol: 'BD$', name: 'Bermudian Dollar' },
+            { code: 'AWG', symbol: 'ƒ', name: 'Aruban Florin' },
+            { code: 'ANG', symbol: 'ƒ', name: 'Netherlands Antillean Guilder' },
+            { code: 'SRD', symbol: '$', name: 'Surinamese Dollar' },
+            { code: 'GYD', symbol: 'G$', name: 'Guyanese Dollar' },
+            { code: 'HTG', symbol: 'G', name: 'Haitian Gourde' },
+            { code: 'CUP', symbol: '$', name: 'Cuban Peso' },
+            { code: 'CUC', symbol: 'CUC$', name: 'Cuban Convertible Peso' },
+            { code: 'IRR', symbol: '﷼', name: 'Iranian Rial' }
+        ];
+        
+        const selectedCurrency = this._formData.currency || '$';
+        
+        return currencies.map(c => 
+            `<option value="${c.symbol}" ${selectedCurrency === c.symbol ? 'selected' : ''}>${c.code} (${c.symbol}) - ${c.name}</option>`
+        ).join('');
+    }
+    
+    async _loadRelatedListingsOptions() {
+        console.log('🏠 Dashboard: Loading related listings options');
+        
+        try {
+            // Dispatch event to get all listings for selection
+            this._dispatchEvent('load-all-listings-for-selection', {
+                excludeId: this._selectedListing?._id || null
+            });
+        } catch (error) {
+            console.error('🏠 Dashboard: Error loading related listings:', error);
+        }
+    }
+    
+    setAllListingsForSelection(listings) {
+        console.log('🏠 Dashboard: Setting all listings for selection:', listings.length);
+        
+        const container = this._shadow.getElementById('relatedListingsContainer');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (listings.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 40px 20px;">No other listings available</div>';
+            return;
+        }
+        
+        // Get currently selected related IDs
+        const selectedIds = this._formData.relatedProperties || [];
+        
+        listings.forEach(listing => {
+            const isSelected = selectedIds.includes(listing._id);
+            
+            const item = document.createElement('label');
+            item.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: white; transition: all 0.2s;';
+            
+            item.innerHTML = `
+                <input type="checkbox" class="checkbox related-checkbox" data-id="${listing._id}" ${isSelected ? 'checked' : ''} style="flex-shrink: 0;">
+                <img src="${listing.thumbnailImage || 'https://via.placeholder.com/60'}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${listing.title}</div>
+                    <div style="font-size: 12px; color: #6b7280;">${listing.location || 'No location'}</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #8b5cf6; margin-top: 4px;">${listing.currency || '$'}${this._formatNumber(listing.price || 0)}</div>
+                </div>
+            `;
+            
+            item.addEventListener('mouseenter', () => {
+                item.style.borderColor = '#8b5cf6';
+                item.style.background = '#f5f3ff';
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                item.style.borderColor = '#e5e7eb';
+                item.style.background = 'white';
+            });
+            
+            const checkbox = item.querySelector('.related-checkbox');
+            checkbox.addEventListener('change', () => {
+                this._updateRelatedProperties();
+            });
+            
+            container.appendChild(item);
+        });
+    }
+    
+    _updateRelatedProperties() {
+        const checkboxes = this._shadow.querySelectorAll('.related-checkbox');
+        const selectedIds = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.dataset.id);
+        
+        this._formData.relatedProperties = selectedIds;
+        console.log('🏠 Dashboard: Updated related properties:', selectedIds);
     }
 }
 
