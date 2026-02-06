@@ -1,15 +1,22 @@
-// Filename: real-estate-dashboard.js (Custom Element)
-
 class RealEstateDashboard extends HTMLElement {
     constructor() {
         super();
-        this.currentListing = null;
-    }
-    
-    connectedCallback() {
-        console.log('🏠 Dashboard: Custom element connected');
-        this.render();
-        this.attachEventListeners();
+        console.log('🏠 Dashboard: Initializing...');
+        this._shadow = this.attachShadow({ mode: 'open' });
+        this._listings = [];
+        this._currentPage = 0;
+        this._pageSize = 12;
+        this._totalListings = 0;
+        this._selectedListing = null;
+        this._editMode = false;
+        this._thumbnailFile = null;
+        this._galleryFiles = [];
+        this._formData = {};
+        this._root = document.createElement('div');
+        
+        this._createStructure();
+        this._setupEventListeners();
+        console.log('🏠 Dashboard: Complete');
     }
     
     static get observedAttributes() {
@@ -20,7 +27,7 @@ class RealEstateDashboard extends HTMLElement {
         if (name === 'listing-data' && newValue && newValue !== oldValue) {
             try {
                 const data = JSON.parse(newValue);
-                this.setListingData(data.listings);
+                this.setListings(data);
             } catch (e) {
                 console.error('🏠 Dashboard: Parse error:', e);
             }
@@ -47,1943 +54,1930 @@ class RealEstateDashboard extends HTMLElement {
         if (name === 'notification' && newValue && newValue !== oldValue) {
             try {
                 const notification = JSON.parse(newValue);
-                this.showNotification(notification.type, notification.message);
+                this._showToast(notification.type, notification.message);
+                if (notification.type === 'success') {
+                    this._hideForm();
+                }
             } catch (e) {
-                console.error('🏠 Dashboard: Parse error:', e);
+                console.error('🏠 Dashboard: Notification error:', e);
             }
         }
         
         if (name === 'upload-progress' && newValue && newValue !== oldValue) {
             try {
                 const progress = JSON.parse(newValue);
-                this.updateProgress(progress.progress, progress.message);
+                this._updateUploadProgress(progress);
             } catch (e) {
-                console.error('🏠 Dashboard: Parse error:', e);
+                console.error('🏠 Dashboard: Progress error:', e);
             }
         }
     }
     
-    render() {
-        this.innerHTML = `
+    connectedCallback() {
+        console.log('🏠 Dashboard: Connected to DOM');
+    }
+    
+    _createStructure() {
+        this._root.innerHTML = `
             <style>
-                * {
-                    box-sizing: border-box;
-                    margin: 0;
-                    padding: 0;
+                @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+                
+                * { box-sizing: border-box; margin: 0; padding: 0; }
+                
+                :host {
+                    display: block;
+                    width: 100%;
+                    font-family: 'Inter', sans-serif;
+                    font-size: 14px;
+                    background: #f9fafb;
                 }
                 
-                .dashboard-container {
-                    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-                    max-width: 1400px;
-                    margin: 0 auto;
-                    padding: 20px;
-                    background: #f8f9fa;
-                }
+                .container { width: 100%; min-height: 600px; }
                 
                 .header {
                     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                     color: white;
-                    padding: 30px;
-                    border-radius: 12px;
-                    margin-bottom: 30px;
-                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    padding: 32px;
                 }
                 
-                .header h1 {
-                    font-size: 28px;
-                    font-weight: 700;
-                    margin-bottom: 10px;
-                }
+                .header-content { max-width: 1400px; margin: 0 auto; }
                 
-                .header p {
-                    opacity: 0.9;
-                    font-size: 14px;
-                }
+                .title { font-size: 32px; font-weight: 800; margin-bottom: 8px; }
+                .subtitle { font-size: 16px; opacity: 0.95; }
                 
-                .stats-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-                    gap: 20px;
-                    margin-bottom: 30px;
-                }
-                
-                .stat-card {
-                    background: white;
-                    padding: 20px;
-                    border-radius: 8px;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
-                    border-left: 4px solid #667eea;
-                }
-                
-                .stat-card h3 {
-                    color: #666;
-                    font-size: 12px;
-                    text-transform: uppercase;
-                    letter-spacing: 0.5px;
-                    margin-bottom: 8px;
-                }
-                
-                .stat-card .number {
-                    font-size: 32px;
-                    font-weight: 700;
-                    color: #333;
-                }
-                
-                .controls {
+                .stats {
                     display: flex;
-                    gap: 15px;
-                    margin-bottom: 30px;
+                    gap: 24px;
+                    margin-top: 24px;
                     flex-wrap: wrap;
                 }
                 
-                .btn {
-                    padding: 12px 24px;
-                    border: none;
-                    border-radius: 6px;
-                    font-size: 14px;
-                    font-weight: 600;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    display: inline-flex;
+                .stat {
+                    background: rgba(255,255,255,0.15);
+                    padding: 16px 20px;
+                    border-radius: 12px;
+                    min-width: 140px;
+                }
+                
+                .stat-label { font-size: 13px; opacity: 0.9; }
+                .stat-value { font-size: 28px; font-weight: 700; margin-top: 4px; }
+                
+                .toolbar {
+                    max-width: 1400px;
+                    margin: 0 auto;
+                    padding: 24px 32px;
+                    display: flex;
+                    justify-content: space-between;
                     align-items: center;
-                    gap: 8px;
                 }
                 
-                .btn-primary {
-                    background: #667eea;
-                    color: white;
+                .main { padding: 0 32px 32px; }
+                .content { max-width: 1400px; margin: 0 auto; }
+                
+                .grid {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+                    gap: 24px;
+                    margin-bottom: 32px;
                 }
                 
-                .btn-primary:hover {
-                    background: #5568d3;
-                    transform: translateY(-1px);
-                    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
-                }
-                
-                .btn-secondary {
+                .card {
                     background: white;
-                    color: #667eea;
-                    border: 2px solid #667eea;
-                }
-                
-                .btn-secondary:hover {
-                    background: #f8f9ff;
-                }
-                
-                .listings-table {
-                    background: white;
-                    border-radius: 8px;
+                    border-radius: 16px;
                     overflow: hidden;
-                    box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+                    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+                    border: 1px solid #e5e7eb;
+                    transition: all 0.3s;
+                    display: flex;
+                    flex-direction: column;
                 }
                 
-                .table-header {
-                    background: #f8f9fa;
-                    padding: 15px 20px;
-                    border-bottom: 2px solid #e9ecef;
-                    font-weight: 600;
-                    display: grid;
-                    grid-template-columns: 80px 1fr 200px 150px 150px 200px;
-                    gap: 15px;
-                    align-items: center;
+                .card:hover {
+                    box-shadow: 0 20px 25px rgba(0,0,0,0.1);
+                    transform: translateY(-8px);
                 }
                 
-                .listing-row {
-                    padding: 15px 20px;
-                    border-bottom: 1px solid #f1f3f5;
-                    display: grid;
-                    grid-template-columns: 80px 1fr 200px 150px 150px 200px;
-                    gap: 15px;
-                    align-items: center;
-                    transition: background 0.2s;
-                }
-                
-                .listing-row:hover {
-                    background: #f8f9ff;
-                }
-                
-                .listing-image {
-                    width: 60px;
-                    height: 60px;
-                    border-radius: 6px;
+                .card-img {
+                    width: 100%;
+                    height: 220px;
                     object-fit: cover;
-                    border: 2px solid #e9ecef;
+                    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
                 }
                 
-                .listing-title {
-                    font-weight: 600;
-                    color: #333;
-                    margin-bottom: 4px;
-                }
+                .card-body { padding: 20px; flex: 1; display: flex; flex-direction: column; }
                 
-                .listing-location {
-                    font-size: 13px;
-                    color: #666;
+                .card-badges {
+                    display: flex;
+                    gap: 8px;
+                    margin-bottom: 12px;
+                    flex-wrap: wrap;
                 }
                 
                 .badge {
-                    display: inline-block;
-                    padding: 4px 12px;
+                    display: inline-flex;
+                    padding: 4px 10px;
                     border-radius: 12px;
-                    font-size: 12px;
+                    font-size: 11px;
                     font-weight: 600;
+                    text-transform: uppercase;
                 }
                 
-                .badge-sale {
-                    background: #e3f2fd;
-                    color: #1976d2;
+                .badge-sale { background: #dbeafe; color: #1e40af; }
+                .badge-rent { background: #fef3c7; color: #92400e; }
+                .badge-featured { background: #fce7f3; color: #9f1239; }
+                
+                .card-title {
+                    font-size: 18px;
+                    font-weight: 700;
+                    margin-bottom: 8px;
+                    line-height: 1.4;
+                    display: -webkit-box;
+                    -webkit-line-clamp: 2;
+                    -webkit-box-orient: vertical;
+                    overflow: hidden;
                 }
                 
-                .badge-rent {
-                    background: #f3e5f5;
-                    color: #7b1fa2;
+                .card-location {
+                    font-size: 13px;
+                    color: #6b7280;
+                    margin-bottom: 12px;
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
                 }
                 
-                .action-buttons {
+                .card-price {
+                    font-size: 24px;
+                    font-weight: 800;
+                    color: #8b5cf6;
+                    margin-bottom: 12px;
+                }
+                
+                .card-features {
+                    display: flex;
+                    gap: 16px;
+                    margin-bottom: 16px;
+                    font-size: 13px;
+                    color: #4b5563;
+                }
+                
+                .feature {
+                    display: flex;
+                    align-items: center;
+                    gap: 4px;
+                }
+                
+                .card-actions {
                     display: flex;
                     gap: 8px;
+                    margin-top: auto;
                 }
                 
-                .btn-small {
-                    padding: 6px 12px;
-                    font-size: 12px;
-                    border-radius: 4px;
+                .btn {
+                    flex: 1;
+                    padding: 10px 16px;
                     border: none;
+                    border-radius: 8px;
+                    font-size: 13px;
+                    font-weight: 600;
                     cursor: pointer;
                     transition: all 0.2s;
+                    font-family: inherit;
                 }
                 
-                .btn-edit {
-                    background: #4caf50;
-                    color: white;
-                }
+                .btn:hover { transform: translateY(-2px); box-shadow: 0 4px 6px rgba(0,0,0,0.1); }
+                .btn:disabled { opacity: 0.6; cursor: not-allowed; transform: none; }
                 
-                .btn-edit:hover {
-                    background: #45a049;
-                }
+                .btn-primary { background: #8b5cf6; color: white; }
+                .btn-success { background: #10b981; color: white; }
+                .btn-warning { background: #f59e0b; color: white; }
+                .btn-danger { background: #ef4444; color: white; }
+                .btn-secondary { background: #f3f4f6; color: #111827; }
                 
-                .btn-delete {
-                    background: #f44336;
-                    color: white;
-                }
-                
-                .btn-delete:hover {
-                    background: #da190b;
+                .btn-large {
+                    padding: 14px 28px;
+                    font-size: 15px;
+                    border-radius: 12px;
                 }
                 
                 .modal {
-                    display: none;
                     position: fixed;
-                    top: 0;
-                    left: 0;
-                    width: 100%;
-                    height: 100%;
-                    background: rgba(0,0,0,0.5);
+                    top: 0; left: 0; right: 0; bottom: 0;
+                    background: rgba(0,0,0,0.7);
+                    display: none;
+                    align-items: center;
+                    justify-content: center;
                     z-index: 1000;
                     overflow-y: auto;
+                    padding: 20px;
                 }
                 
-                .modal.active {
-                    display: flex;
-                    align-items: flex-start;
-                    justify-content: center;
-                    padding: 40px 20px;
-                }
+                .modal.active { display: flex; }
                 
                 .modal-content {
                     background: white;
-                    border-radius: 12px;
-                    width: 100%;
+                    border-radius: 20px;
                     max-width: 900px;
+                    width: 100%;
                     max-height: 90vh;
                     overflow-y: auto;
-                    box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+                    margin: auto;
                 }
                 
                 .modal-header {
-                    padding: 24px 30px;
-                    border-bottom: 2px solid #f1f3f5;
+                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                    color: white;
+                    padding: 24px 32px;
                     display: flex;
                     justify-content: space-between;
                     align-items: center;
                     position: sticky;
                     top: 0;
-                    background: white;
                     z-index: 10;
                 }
                 
-                .modal-header h2 {
-                    font-size: 22px;
-                    color: #333;
-                }
+                .modal-title { font-size: 24px; font-weight: 700; }
                 
-                .close-btn {
-                    background: none;
+                .modal-close {
+                    background: rgba(255,255,255,0.2);
                     border: none;
-                    font-size: 28px;
+                    color: white;
+                    font-size: 24px;
                     cursor: pointer;
-                    color: #999;
-                    padding: 0;
-                    width: 32px;
-                    height: 32px;
-                    display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    border-radius: 4px;
-                    transition: all 0.2s;
+                    width: 40px;
+                    height: 40px;
+                    border-radius: 10px;
                 }
                 
-                .close-btn:hover {
-                    background: #f1f3f5;
-                    color: #333;
-                }
-                
-                .modal-body {
-                    padding: 30px;
-                }
+                .modal-body { padding: 32px; }
                 
                 .form-section {
-                    margin-bottom: 30px;
+                    margin-bottom: 32px;
+                    padding-bottom: 32px;
+                    border-bottom: 2px solid #f3f4f6;
                 }
                 
-                .form-section h3 {
-                    font-size: 16px;
-                    color: #667eea;
-                    margin-bottom: 15px;
-                    padding-bottom: 8px;
-                    border-bottom: 2px solid #f1f3f5;
-                }
+                .form-section:last-child { border-bottom: none; }
                 
-                .form-grid {
-                    display: grid;
-                    grid-template-columns: repeat(2, 1fr);
-                    gap: 20px;
-                }
-                
-                .form-group {
-                    display: flex;
-                    flex-direction: column;
-                }
-                
-                .form-group.full-width {
-                    grid-column: 1 / -1;
-                }
-                
-                .form-group label {
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #555;
-                    margin-bottom: 6px;
-                }
-                
-                .form-group input,
-                .form-group select,
-                .form-group textarea {
-                    padding: 10px 12px;
-                    border: 2px solid #e9ecef;
-                    border-radius: 6px;
-                    font-size: 14px;
-                    transition: border-color 0.2s;
-                    font-family: inherit;
-                }
-                
-                .form-group input:focus,
-                .form-group select:focus,
-                .form-group textarea:focus {
-                    outline: none;
-                    border-color: #667eea;
-                }
-                
-                .form-group input:read-only {
-                    background: #f8f9fa;
-                    color: #999;
-                }
-                
-                .form-group textarea {
-                    resize: vertical;
-                    min-height: 100px;
-                }
-                
-                .checkbox-grid {
-                    display: grid;
-                    grid-template-columns: repeat(3, 1fr);
-                    gap: 12px;
-                }
-                
-                .checkbox-item {
+                .section-title {
+                    font-size: 18px;
+                    font-weight: 700;
+                    color: #111827;
+                    margin-bottom: 20px;
                     display: flex;
                     align-items: center;
                     gap: 8px;
                 }
                 
-                .checkbox-item input[type="checkbox"] {
+                .form-group { margin-bottom: 20px; }
+                
+                .label {
+                    display: block;
+                    font-weight: 600;
+                    margin-bottom: 8px;
+                    color: #374151;
+                }
+                
+                .label.required::after {
+                    content: '*';
+                    color: #ef4444;
+                    margin-left: 4px;
+                }
+                
+                .input, .textarea, .select {
+                    width: 100%;
+                    padding: 12px;
+                    border: 2px solid #e5e7eb;
+                    border-radius: 8px;
+                    font-size: 14px;
+                    font-family: inherit;
+                    transition: border-color 0.2s;
+                }
+                
+                .input:focus, .textarea:focus, .select:focus {
+                    outline: none;
+                    border-color: #8b5cf6;
+                }
+                
+                .input:disabled {
+                    background: #f9fafb;
+                    color: #9ca3af;
+                    cursor: not-allowed;
+                }
+                
+                .textarea { min-height: 100px; resize: vertical; }
+                
+                .form-row {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr;
+                    gap: 16px;
+                }
+                
+                .form-row-3 {
+                    display: grid;
+                    grid-template-columns: 1fr 1fr 1fr;
+                    gap: 16px;
+                }
+                
+                .checkbox-group {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+                    gap: 12px;
+                    margin-top: 12px;
+                }
+                
+                .checkbox-label {
+                    display: flex;
+                    align-items: center;
+                    gap: 8px;
+                    font-weight: 500;
+                    cursor: pointer;
+                }
+                
+                .checkbox {
                     width: 18px;
                     height: 18px;
                     cursor: pointer;
                 }
                 
-                .checkbox-item label {
-                    font-size: 13px;
-                    color: #555;
-                    cursor: pointer;
-                    margin: 0;
-                }
+                .file-input { display: none; }
                 
-                .image-upload-section {
-                    border: 2px dashed #e9ecef;
-                    border-radius: 8px;
-                    padding: 20px;
-                    text-align: center;
-                    background: #f8f9fa;
-                }
-                
-                .image-preview {
-                    margin-top: 15px;
+                .file-label {
                     display: flex;
-                    gap: 10px;
-                    flex-wrap: wrap;
+                    flex-direction: column;
+                    align-items: center;
                     justify-content: center;
+                    gap: 12px;
+                    padding: 32px;
+                    border: 2px dashed #e5e7eb;
+                    border-radius: 12px;
+                    cursor: pointer;
+                    background: #f9fafb;
+                    transition: all 0.2s;
                 }
                 
-                .image-preview-item {
+                .file-label:hover { border-color: #8b5cf6; background: #ede9fe; }
+                
+                .file-preview {
+                    margin-top: 16px;
+                    display: none;
+                }
+                
+                .file-preview.active { display: block; }
+                
+                .preview-img {
+                    width: 100%;
+                    max-height: 200px;
+                    object-fit: cover;
+                    border-radius: 12px;
+                    border: 2px solid #e5e7eb;
+                }
+                
+                .gallery-preview {
+                    display: grid;
+                    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+                    gap: 12px;
+                    margin-top: 16px;
+                }
+                
+                .gallery-item {
                     position: relative;
-                    width: 120px;
-                    height: 120px;
+                    aspect-ratio: 1;
+                    border-radius: 8px;
+                    overflow: hidden;
+                    border: 2px solid #e5e7eb;
                 }
                 
-                .image-preview-item img {
+                .gallery-item img {
                     width: 100%;
                     height: 100%;
                     object-fit: cover;
-                    border-radius: 6px;
-                    border: 2px solid #e9ecef;
                 }
                 
-                .image-delete-btn {
+                .gallery-remove {
                     position: absolute;
-                    top: 5px;
-                    right: 5px;
-                    background: rgba(244, 67, 54, 0.9);
+                    top: 4px;
+                    right: 4px;
+                    background: rgba(239, 68, 68, 0.9);
                     color: white;
                     border: none;
-                    border-radius: 50%;
                     width: 24px;
                     height: 24px;
+                    border-radius: 50%;
                     cursor: pointer;
                     font-size: 14px;
                     display: flex;
                     align-items: center;
                     justify-content: center;
-                    transition: all 0.2s;
                 }
                 
-                .image-delete-btn:hover {
-                    background: rgba(244, 67, 54, 1);
-                    transform: scale(1.1);
+                .help-text {
+                    font-size: 12px;
+                    color: #6b7280;
+                    margin-top: 6px;
                 }
                 
-                .upload-btn-wrapper {
-                    display: inline-block;
-                    position: relative;
-                }
-                
-                .upload-btn-wrapper input[type="file"] {
-                    position: absolute;
-                    left: 0;
-                    top: 0;
-                    opacity: 0;
-                    width: 100%;
-                    height: 100%;
-                    cursor: pointer;
-                }
-                
-                .progress-bar-container {
+                .progress-section {
+                    margin-top: 24px;
+                    padding: 20px;
+                    background: #f9fafb;
+                    border-radius: 12px;
                     display: none;
-                    margin: 20px 0;
-                    background: #f1f3f5;
-                    border-radius: 8px;
-                    overflow: hidden;
-                    height: 32px;
-                    position: relative;
                 }
                 
-                .progress-bar-container.active {
-                    display: block;
+                .progress-section.active { display: block; }
+                
+                .progress-bar-bg {
+                    width: 100%;
+                    height: 12px;
+                    background: #e5e7eb;
+                    border-radius: 6px;
+                    overflow: hidden;
+                    margin-top: 12px;
                 }
                 
                 .progress-bar {
                     height: 100%;
-                    background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
-                    transition: width 0.3s;
+                    background: linear-gradient(90deg, #8b5cf6, #7c3aed);
+                    width: 0%;
+                    transition: width 0.3s ease;
+                }
+                
+                .modal-footer {
+                    padding: 20px 32px;
+                    background: #f9fafb;
+                    border-top: 2px solid #e5e7eb;
                     display: flex;
-                    align-items: center;
-                    justify-content: center;
-                    color: white;
-                    font-size: 12px;
-                    font-weight: 600;
+                    gap: 12px;
+                    justify-content: flex-end;
+                    position: sticky;
+                    bottom: 0;
                 }
                 
-                .progress-message {
-                    position: absolute;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    font-size: 12px;
-                    font-weight: 600;
-                    color: #333;
-                    white-space: nowrap;
-                }
-                
-                .notification {
+                .toast {
                     position: fixed;
                     top: 20px;
                     right: 20px;
-                    padding: 16px 24px;
-                    border-radius: 8px;
-                    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-                    z-index: 2000;
+                    padding: 16px 20px;
+                    border-radius: 12px;
+                    box-shadow: 0 20px 25px rgba(0,0,0,0.1);
                     display: none;
-                    align-items: center;
-                    gap: 12px;
-                    min-width: 300px;
+                    z-index: 2000;
+                    min-width: 320px;
                     animation: slideIn 0.3s;
                 }
                 
+                .toast.show { display: block; }
+                
+                .toast-success {
+                    background: #f0fdf4;
+                    border-left: 4px solid #10b981;
+                    color: #166534;
+                }
+                
+                .toast-error {
+                    background: #fef2f2;
+                    border-left: 4px solid #ef4444;
+                    color: #991b1b;
+                }
+                
                 @keyframes slideIn {
-                    from {
-                        transform: translateX(400px);
-                        opacity: 0;
-                    }
-                    to {
-                        transform: translateX(0);
-                        opacity: 1;
-                    }
+                    from { transform: translateX(400px); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
                 }
                 
-                .notification.show {
+                .loading {
                     display: flex;
-                }
-                
-                .notification.success {
-                    background: #4caf50;
-                    color: white;
-                }
-                
-                .notification.error {
-                    background: #f44336;
-                    color: white;
-                }
-                
-                .pagination {
-                    display: flex;
-                    justify-content: center;
-                    gap: 10px;
-                    margin-top: 20px;
-                    padding: 20px;
-                }
-                
-                .pagination button {
-                    padding: 8px 16px;
-                    border: 2px solid #667eea;
-                    background: white;
-                    color: #667eea;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-weight: 600;
-                    transition: all 0.2s;
-                }
-                
-                .pagination button:hover:not(:disabled) {
-                    background: #667eea;
-                    color: white;
-                }
-                
-                .pagination button:disabled {
-                    opacity: 0.5;
-                    cursor: not-allowed;
-                }
-                
-                .pagination .page-info {
-                    display: flex;
+                    flex-direction: column;
                     align-items: center;
-                    padding: 0 15px;
-                    font-weight: 600;
-                    color: #555;
+                    justify-content: center;
+                    padding: 80px 20px;
+                    min-height: 400px;
                 }
                 
-                .related-listings-grid {
-                    display: grid;
-                    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-                    gap: 15px;
-                    margin-top: 15px;
-                    max-height: 400px;
-                    overflow-y: auto;
-                    padding: 10px;
-                    background: #f8f9fa;
-                    border-radius: 8px;
+                .loading.hide { display: none; }
+                
+                .spinner {
+                    width: 48px;
+                    height: 48px;
+                    border: 4px solid #e5e7eb;
+                    border-top-color: #8b5cf6;
+                    border-radius: 50%;
+                    animation: spin 0.8s linear infinite;
                 }
                 
-                .related-listing-card {
-                    background: white;
-                    border: 2px solid #e9ecef;
-                    border-radius: 8px;
-                    padding: 12px;
-                    cursor: pointer;
-                    transition: all 0.2s;
-                    position: relative;
-                }
-                
-                .related-listing-card:hover {
-                    border-color: #667eea;
-                    transform: translateY(-2px);
-                    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-                }
-                
-                .related-listing-card.selected {
-                    border-color: #667eea;
-                    background: #f8f9ff;
-                }
-                
-                .related-listing-card input[type="checkbox"] {
-                    position: absolute;
-                    top: 10px;
-                    right: 10px;
-                    width: 20px;
-                    height: 20px;
-                    cursor: pointer;
-                }
-                
-                .related-listing-image {
-                    width: 100%;
-                    height: 120px;
-                    object-fit: cover;
-                    border-radius: 6px;
-                    margin-bottom: 8px;
-                }
-                
-                .related-listing-title {
-                    font-size: 13px;
-                    font-weight: 600;
-                    color: #333;
-                    margin-bottom: 4px;
-                    padding-right: 25px;
-                }
-                
-                .related-listing-location {
-                    font-size: 11px;
-                    color: #666;
-                    margin-bottom: 4px;
-                }
-                
-                .related-listing-price {
-                    font-size: 12px;
-                    font-weight: 700;
-                    color: #667eea;
-                }
-                
-                .address-inputs {
-                    display: grid;
-                    grid-template-columns: 1fr 1fr;
-                    gap: 15px;
-                }
-                
-                .address-inputs .form-group {
-                    margin-bottom: 0;
+                @keyframes spin {
+                    to { transform: rotate(360deg); }
                 }
                 
                 .empty-state {
                     text-align: center;
-                    padding: 60px 20px;
-                    color: #999;
+                    padding: 80px 20px;
                 }
                 
-                .empty-state-icon {
-                    font-size: 48px;
-                    margin-bottom: 16px;
+                .empty-state h2 {
+                    font-size: 24px;
+                    color: #374151;
+                    margin-bottom: 12px;
                 }
                 
-                .loading {
-                    text-align: center;
-                    padding: 40px;
-                    color: #666;
+                .empty-state p {
+                    color: #6b7280;
+                    margin-bottom: 24px;
+                }
+                
+                @media (max-width: 768px) {
+                    .form-row, .form-row-3 {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .grid {
+                        grid-template-columns: 1fr;
+                    }
+                    
+                    .checkbox-group {
+                        grid-template-columns: 1fr;
+                    }
                 }
             </style>
             
-            <div class="dashboard-container">
-                <!-- Header -->
+            <div class="container">
                 <div class="header">
-                    <h1>🏠 Real Estate Listings Dashboard</h1>
-                    <p>Manage your property listings, images, and details</p>
+                    <div class="header-content">
+                        <h1 class="title">Real Estate Listings Manager</h1>
+                        <p class="subtitle">Manage your property listings with automatic image upload</p>
+                        <div class="stats">
+                            <div class="stat">
+                                <div class="stat-label">Total Listings</div>
+                                <div class="stat-value" id="totalListings">0</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">For Sale</div>
+                                <div class="stat-value" id="forSale">0</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">For Rent</div>
+                                <div class="stat-value" id="forRent">0</div>
+                            </div>
+                            <div class="stat">
+                                <div class="stat-label">Featured</div>
+                                <div class="stat-value" id="featured">0</div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
                 
-                <!-- Statistics -->
-                <div class="stats-grid" id="statsGrid">
-                    <div class="stat-card">
-                        <h3>Total Listings</h3>
-                        <div class="number" id="totalListings">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>For Sale</h3>
-                        <div class="number" id="forSaleCount">0</div>
-                    </div>
-                    <div class="stat-card">
-                        <h3>For Rent</h3>
-                        <div class="number" id="forRentCount">0</div>
-                    </div>
-                </div>
-                
-                <!-- Controls -->
-                <div class="controls">
-                    <button class="btn btn-primary" id="addListingBtn">
+                <div class="toolbar">
+                    <div></div>
+                    <button class="btn btn-success btn-large" id="addNewBtn">
                         ➕ Add New Listing
                     </button>
-                    <button class="btn btn-secondary" id="refreshBtn">
-                        🔄 Refresh
-                    </button>
                 </div>
                 
-                <!-- Listings Table -->
-                <div class="listings-table">
-                    <div class="table-header">
-                        <div>Image</div>
-                        <div>Title & Location</div>
-                        <div>Type</div>
-                        <div>Price</div>
-                        <div>Details</div>
-                        <div>Actions</div>
-                    </div>
-                    <div id="listingsContainer">
-                        <div class="loading">Loading listings...</div>
-                    </div>
-                </div>
-                
-                <!-- Pagination -->
-                <div class="pagination" id="pagination"></div>
-                
-                <!-- Modal -->
-                <div class="modal" id="listingModal">
-                    <div class="modal-content">
-                        <div class="modal-header">
-                            <h2 id="modalTitle">Add New Listing</h2>
-                            <button class="close-btn" id="closeModalBtn">&times;</button>
+                <div class="main">
+                    <div class="content">
+                        <div id="loading" class="loading">
+                            <div class="spinner"></div>
+                            <p style="margin-top: 16px; color: #6b7280;">Loading listings...</p>
                         </div>
-                        <div class="modal-body">
-                            <form id="listingForm">
-                                <!-- Basic Information -->
-                                <div class="form-section">
-                                    <h3>📋 Basic Information</h3>
-                                    <div class="form-grid">
-                                        <div class="form-group full-width">
-                                            <label>Title *</label>
-                                            <input type="text" id="title" required>
-                                        </div>
-                                        <div class="form-group full-width">
-                                            <label>Slug (Auto-generated)</label>
-                                            <input type="text" id="slug" readonly>
-                                        </div>
-                                        <div class="form-group full-width">
-                                            <label>Description</label>
-                                            <textarea id="description"></textarea>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Address Information -->
-                                <div class="form-section">
-                                    <h3>📍 Address Information</h3>
-                                    <div class="form-group full-width">
-                                        <label>Formatted Address *</label>
-                                        <input type="text" id="addressFormatted" placeholder="e.g., 123 Main St, New York, NY 10001" required>
-                                    </div>
-                                    <div class="address-inputs">
-                                        <div class="form-group">
-                                            <label>Latitude *</label>
-                                            <input type="number" id="addressLatitude" step="0.000001" placeholder="e.g., 40.7128" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Longitude *</label>
-                                            <input type="number" id="addressLongitude" step="0.000001" placeholder="e.g., -74.0060" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>City</label>
-                                            <input type="text" id="addressCity" placeholder="e.g., New York">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>State/Province</label>
-                                            <input type="text" id="addressState" placeholder="e.g., NY">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Country Code</label>
-                                            <input type="text" id="addressCountry" placeholder="e.g., US" maxlength="2">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Postal Code</label>
-                                            <input type="text" id="addressPostalCode" placeholder="e.g., 10001">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Property Details -->
-                                <div class="form-section">
-                                    <h3>🏡 Property Details</h3>
-                                    <div class="form-grid">
-                                        <div class="form-group">
-                                            <label>Property Type *</label>
-                                            <select id="propertyType" required>
-                                                <option value="">Select Type</option>
-                                                <option value="House">House</option>
-                                                <option value="Apartment">Apartment</option>
-                                                <option value="Condo">Condo</option>
-                                                <option value="Townhouse">Townhouse</option>
-                                                <option value="Villa">Villa</option>
-                                                <option value="Land">Land</option>
-                                                <option value="Commercial">Commercial</option>
-                                                <option value="Other">Other</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Listing Type *</label>
-                                            <select id="listingType" required>
-                                                <option value="sale">For Sale</option>
-                                                <option value="rent">For Rent</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Condition</label>
-                                            <select id="condition">
-                                                <option value="">Select Condition</option>
-                                                <option value="New">New</option>
-                                                <option value="Like New">Like New</option>
-                                                <option value="Excellent">Excellent</option>
-                                                <option value="Good">Good</option>
-                                                <option value="Fair">Fair</option>
-                                                <option value="Needs Renovation">Needs Renovation</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Year Built</label>
-                                            <input type="number" id="yearBuilt" min="1800" max="2100">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Bedrooms</label>
-                                            <input type="number" id="bedrooms" min="0">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Bathrooms</label>
-                                            <input type="number" id="bathrooms" min="0" step="0.5">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Square Footage</label>
-                                            <input type="number" id="squareFootage" min="0">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Lot Size</label>
-                                            <input type="number" id="lotSize" min="0">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Total Rooms</label>
-                                            <input type="number" id="totalRooms" min="0">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Garage Spaces</label>
-                                            <input type="number" id="garageSpaces" min="0">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Pricing -->
-                                <div class="form-section">
-                                    <h3>💰 Pricing</h3>
-                                    <div class="form-grid">
-                                        <div class="form-group">
-                                            <label>Price *</label>
-                                            <input type="number" id="price" min="0" required>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Currency *</label>
-                                            <select id="currency" required>
-                                                <option value="USD">USD - US Dollar</option>
-                                                <option value="EUR">EUR - Euro</option>
-                                                <option value="GBP">GBP - British Pound</option>
-                                                <option value="CAD">CAD - Canadian Dollar</option>
-                                                <option value="AUD">AUD - Australian Dollar</option>
-                                                <option value="JPY">JPY - Japanese Yen</option>
-                                                <option value="CNY">CNY - Chinese Yuan</option>
-                                                <option value="INR">INR - Indian Rupee</option>
-                                                <option value="MXN">MXN - Mexican Peso</option>
-                                                <option value="BRL">BRL - Brazilian Real</option>
-                                                <option value="ZAR">ZAR - South African Rand</option>
-                                                <option value="AED">AED - UAE Dirham</option>
-                                                <option value="SAR">SAR - Saudi Riyal</option>
-                                                <option value="SGD">SGD - Singapore Dollar</option>
-                                                <option value="CHF">CHF - Swiss Franc</option>
-                                                <option value="SEK">SEK - Swedish Krona</option>
-                                                <option value="NOK">NOK - Norwegian Krone</option>
-                                                <option value="DKK">DKK - Danish Krone</option>
-                                                <option value="PLN">PLN - Polish Zloty</option>
-                                                <option value="TRY">TRY - Turkish Lira</option>
-                                                <option value="RUB">RUB - Russian Ruble</option>
-                                                <option value="HKD">HKD - Hong Kong Dollar</option>
-                                                <option value="NZD">NZD - New Zealand Dollar</option>
-                                                <option value="KRW">KRW - South Korean Won</option>
-                                                <option value="THB">THB - Thai Baht</option>
-                                                <option value="MYR">MYR - Malaysian Ringgit</option>
-                                                <option value="IDR">IDR - Indonesian Rupiah</option>
-                                                <option value="PHP">PHP - Philippine Peso</option>
-                                                <option value="VND">VND - Vietnamese Dong</option>
-                                                <option value="EGP">EGP - Egyptian Pound</option>
-                                                <option value="NGN">NGN - Nigerian Naira</option>
-                                                <option value="KES">KES - Kenyan Shilling</option>
-                                                <option value="CLP">CLP - Chilean Peso</option>
-                                                <option value="COP">COP - Colombian Peso</option>
-                                                <option value="ARS">ARS - Argentine Peso</option>
-                                                <option value="PEN">PEN - Peruvian Sol</option>
-                                                <option value="ILS">ILS - Israeli Shekel</option>
-                                                <option value="CZK">CZK - Czech Koruna</option>
-                                                <option value="HUF">HUF - Hungarian Forint</option>
-                                                <option value="RON">RON - Romanian Leu</option>
-                                                <option value="BGN">BGN - Bulgarian Lev</option>
-                                                <option value="HRK">HRK - Croatian Kuna</option>
-                                            </select>
-                                        </div>
-                                        <div class="form-group">
-                                            <label>HOA Fee</label>
-                                            <input type="number" id="hoaFee" min="0">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Property Tax</label>
-                                            <input type="number" id="propertyTax" min="0">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Price Valid Until</label>
-                                            <input type="date" id="priceValidUntil">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Images -->
-                                <div class="form-section">
-                                    <h3>📸 Images</h3>
-                                    
-                                    <!-- Thumbnail Image -->
-                                    <div class="form-group full-width">
-                                        <label>Thumbnail Image *</label>
-                                        <div class="image-upload-section">
-                                            <div class="upload-btn-wrapper">
-                                                <button type="button" class="btn btn-primary">Choose Thumbnail</button>
-                                                <input type="file" id="thumbnailInput" accept="image/*">
-                                            </div>
-                                            <div class="image-preview" id="thumbnailPreview"></div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- Gallery Images -->
-                                    <div class="form-group full-width">
-                                        <label>Gallery Images</label>
-                                        <div class="image-upload-section">
-                                            <div class="upload-btn-wrapper">
-                                                <button type="button" class="btn btn-primary">Choose Gallery Images</button>
-                                                <input type="file" id="galleryInput" accept="image/*" multiple>
-                                            </div>
-                                            <div class="image-preview" id="galleryPreview"></div>
-                                        </div>
-                                    </div>
-                                    
-                                    <!-- SEO OG Image -->
-                                    <div class="form-group full-width">
-                                        <label>SEO OG Image (Open Graph Image for Social Sharing)</label>
-                                        <div class="image-upload-section">
-                                            <div class="upload-btn-wrapper">
-                                                <button type="button" class="btn btn-primary">Choose OG Image</button>
-                                                <input type="file" id="seoOgImageInput" accept="image/*">
-                                            </div>
-                                            <div class="image-preview" id="seoOgImagePreview"></div>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Status Badges -->
-                                <div class="form-section">
-                                    <h3>🏷️ Status Badges</h3>
-                                    <div class="checkbox-grid">
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isFeatured">
-                                            <label for="isFeatured">Featured</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isNewConstruction">
-                                            <label for="isNewConstruction">New Construction</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isForeclosure">
-                                            <label for="isForeclosure">Foreclosure</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isShortSale">
-                                            <label for="isShortSale">Short Sale</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isPriceReduced">
-                                            <label for="isPriceReduced">Price Reduced</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isOpenHouse">
-                                            <label for="isOpenHouse">Open House</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="isVirtualTour">
-                                            <label for="isVirtualTour">Virtual Tour</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Property Features -->
-                                <div class="form-section">
-                                    <h3>✨ Property Features</h3>
-                                    <div class="checkbox-grid">
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasPool">
-                                            <label for="hasPool">Pool</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasGarage">
-                                            <label for="hasGarage">Garage</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasBasement">
-                                            <label for="hasBasement">Basement</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasAttic">
-                                            <label for="hasAttic">Attic</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasFireplace">
-                                            <label for="hasFireplace">Fireplace</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasBalcony">
-                                            <label for="hasBalcony">Balcony</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasGarden">
-                                            <label for="hasGarden">Garden</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasSecurity">
-                                            <label for="hasSecurity">Security System</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasAirConditioning">
-                                            <label for="hasAirConditioning">Air Conditioning</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasHeating">
-                                            <label for="hasHeating">Heating</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasWasherDryer">
-                                            <label for="hasWasherDryer">Washer/Dryer</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasDishwasher">
-                                            <label for="hasDishwasher">Dishwasher</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasUpdatedKitchen">
-                                            <label for="hasUpdatedKitchen">Updated Kitchen</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasUpdatedBathroom">
-                                            <label for="hasUpdatedBathroom">Updated Bathroom</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasHardwoodFloors">
-                                            <label for="hasHardwoodFloors">Hardwood Floors</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasWalkInCloset">
-                                            <label for="hasWalkInCloset">Walk-In Closet</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasMasterSuite">
-                                            <label for="hasMasterSuite">Master Suite</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasLaundryRoom">
-                                            <label for="hasLaundryRoom">Laundry Room</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasPantry">
-                                            <label for="hasPantry">Pantry</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasOffice">
-                                            <label for="hasOffice">Home Office</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasGym">
-                                            <label for="hasGym">Gym</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasWinecellar">
-                                            <label for="hasWinecellar">Wine Cellar</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasElevator">
-                                            <label for="hasElevator">Elevator</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasSolarPanels">
-                                            <label for="hasSolarPanels">Solar Panels</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasSmartHome">
-                                            <label for="hasSmartHome">Smart Home</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Location Features -->
-                                <div class="form-section">
-                                    <h3>🌍 Location Features</h3>
-                                    <div class="checkbox-grid">
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasWaterfront">
-                                            <label for="hasWaterfront">Waterfront</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasGolfCourse">
-                                            <label for="hasGolfCourse">Golf Course</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasMountainView">
-                                            <label for="hasMountainView">Mountain View</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasCityView">
-                                            <label for="hasCityView">City View</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasOceanView">
-                                            <label for="hasOceanView">Ocean View</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasPrivateBeach">
-                                            <label for="hasPrivateBeach">Private Beach</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasBoatDock">
-                                            <label for="hasBoatDock">Boat Dock</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasGuestHouse">
-                                            <label for="hasGuestHouse">Guest House</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasInLawSuite">
-                                            <label for="hasInLawSuite">In-Law Suite</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Community Features -->
-                                <div class="form-section">
-                                    <h3>🏘️ Community Features</h3>
-                                    <div class="checkbox-grid">
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasGatedCommunity">
-                                            <label for="hasGatedCommunity">Gated Community</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasClubhouse">
-                                            <label for="hasClubhouse">Clubhouse</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasPlayground">
-                                            <label for="hasPlayground">Playground</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasTennisaccess">
-                                            <label for="hasTennisaccess">Tennis Court</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasPetFriendly">
-                                            <label for="hasPetFriendly">Pet Friendly</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasHandicapAccessible">
-                                            <label for="hasHandicapAccessible">Handicap Accessible</label>
-                                        </div>
-                                        <div class="checkbox-item">
-                                            <input type="checkbox" id="hasRentToOwn">
-                                            <label for="hasRentToOwn">Rent to Own</label>
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Additional Details -->
-                                <div class="form-section">
-                                    <h3>📝 Additional Details</h3>
-                                    <div class="form-grid">
-                                        <div class="form-group">
-                                            <label>Architecture</label>
-                                            <input type="text" id="architecture" placeholder="e.g., Modern, Victorian">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Heating</label>
-                                            <input type="text" id="heating" placeholder="e.g., Central, Gas">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Cooling</label>
-                                            <input type="text" id="cooling" placeholder="e.g., Central AC">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Flooring</label>
-                                            <input type="text" id="flooring" placeholder="e.g., Hardwood, Tile">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>School District</label>
-                                            <input type="text" id="schoolDistrict">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Zoning</label>
-                                            <input type="text" id="zoning">
-                                        </div>
-                                        <div class="form-group">
-                                            <label>Days on Market</label>
-                                            <input type="number" id="daysOnMarket" min="0">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- SEO -->
-                                <div class="form-section">
-                                    <h3>🔍 SEO Settings</h3>
-                                    <div class="form-grid">
-                                        <div class="form-group full-width">
-                                            <label>SEO Title</label>
-                                            <input type="text" id="seoTitle" maxlength="60">
-                                        </div>
-                                        <div class="form-group full-width">
-                                            <label>SEO Description</label>
-                                            <textarea id="seoDescription" maxlength="160"></textarea>
-                                        </div>
-                                        <div class="form-group full-width">
-                                            <label>SEO Keywords</label>
-                                            <input type="text" id="seoKeywords" placeholder="keyword1, keyword2, keyword3">
-                                        </div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Related Listings -->
-                                <div class="form-section">
-                                    <h3>🔗 Related Listings</h3>
-                                    <div id="relatedListingsContainer">
-                                        <div class="loading">Loading available listings...</div>
-                                    </div>
-                                </div>
-                                
-                                <!-- Progress Bar -->
-                                <div class="progress-bar-container" id="progressBarContainer">
-                                    <div class="progress-bar" id="progressBar"></div>
-                                    <div class="progress-message" id="progressMessage"></div>
-                                </div>
-                                
-                                <!-- Submit Button -->
-                                <div class="controls" style="margin-top: 30px; justify-content: flex-end;">
-                                    <button type="button" class="btn btn-secondary" id="cancelBtn">Cancel</button>
-                                    <button type="submit" class="btn btn-primary" id="saveListingBtn">Save Listing</button>
-                                </div>
-                            </form>
+                        
+                        <div id="emptyState" class="empty-state" style="display: none;">
+                            <h2>No Listings Yet</h2>
+                            <p>Get started by adding your first property listing</p>
+                            <button class="btn btn-success btn-large" id="addFirstBtn">
+                                ➕ Add First Listing
+                            </button>
+                        </div>
+                        
+                        <div id="listingsGrid" class="grid"></div>
+                        
+                        <div style="display: flex; justify-content: center; gap: 16px; margin-top: 32px; align-items: center;" id="pagination">
+                            <button class="btn btn-secondary" id="prevBtn" disabled>← Previous</button>
+                            <span id="pageInfo" style="font-weight: 600; color: #374151;">Page 1</span>
+                            <button class="btn btn-secondary" id="nextBtn">Next →</button>
                         </div>
                     </div>
                 </div>
+            </div>
+            
+            <div id="modal" class="modal">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h2 class="modal-title" id="modalTitle">Add New Listing</h2>
+                        <button class="modal-close" id="closeModal">×</button>
+                    </div>
+                    
+                    <div class="modal-body" id="formBody"></div>
+                    
+                    <div class="progress-section" id="progressSection">
+                        <div style="font-weight: 600; margin-bottom: 8px;" id="progressLabel">Uploading...</div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar" id="progressBar"></div>
+                        </div>
+                        <div style="margin-top: 8px; color: #6b7280; font-size: 13px;" id="progressStatus">0%</div>
+                    </div>
+                    
+                    <div class="modal-footer">
+                        <button class="btn btn-secondary" id="cancelBtn">Cancel</button>
+                        <button class="btn btn-success" id="saveBtn">Save Listing</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="toast" id="toast"></div>
+        `;
+        
+        this._shadow.appendChild(this._root);
+    }
+
+    _setupEventListeners() {
+        // Modal controls
+        this._shadow.getElementById('closeModal').addEventListener('click', () => this._hideForm());
+        this._shadow.getElementById('cancelBtn').addEventListener('click', () => this._hideForm());
+        this._shadow.getElementById('saveBtn').addEventListener('click', () => this._handleSave());
+        
+        // Add new buttons
+        this._shadow.getElementById('addNewBtn').addEventListener('click', () => this._showForm(null, false));
+        this._shadow.getElementById('addFirstBtn').addEventListener('click', () => this._showForm(null, false));
+        
+        // Pagination
+        this._shadow.getElementById('prevBtn').addEventListener('click', () => {
+            if (this._currentPage > 0) {
+                this._currentPage--;
+                this._loadListings();
+            }
+        });
+        
+        this._shadow.getElementById('nextBtn').addEventListener('click', () => {
+            this._currentPage++;
+            this._loadListings();
+        });
+    }
+    
+    _dispatchEvent(name, detail) {
+        this.dispatchEvent(new CustomEvent(name, { detail, bubbles: true, composed: true }));
+    }
+    
+    _loadListings() {
+        const loading = this._shadow.getElementById('loading');
+        loading.classList.remove('hide');
+        
+        this._dispatchEvent('load-listings', {
+            limit: this._pageSize,
+            skip: this._currentPage * this._pageSize
+        });
+    }
+    
+    setListings(data) {
+        this._listings = data.listings || [];
+        this._totalListings = data.totalCount || 0;
+        
+        this._shadow.getElementById('loading').classList.add('hide');
+        
+        if (this._listings.length === 0 && this._currentPage === 0) {
+            this._shadow.getElementById('emptyState').style.display = 'block';
+            this._shadow.getElementById('listingsGrid').style.display = 'none';
+            this._shadow.getElementById('pagination').style.display = 'none';
+        } else {
+            this._shadow.getElementById('emptyState').style.display = 'none';
+            this._shadow.getElementById('listingsGrid').style.display = 'grid';
+            this._shadow.getElementById('pagination').style.display = 'flex';
+            this._renderListings();
+        }
+        
+        this._updateStats();
+        this._updatePagination(data.hasMore);
+    }
+    
+    _updatePagination(hasMore) {
+        const prevBtn = this._shadow.getElementById('prevBtn');
+        const nextBtn = this._shadow.getElementById('nextBtn');
+        const pageInfo = this._shadow.getElementById('pageInfo');
+        
+        prevBtn.disabled = this._currentPage === 0;
+        nextBtn.disabled = !hasMore;
+        
+        const currentPageNum = this._currentPage + 1;
+        const totalPages = Math.ceil(this._totalListings / this._pageSize);
+        pageInfo.textContent = `Page ${currentPageNum} of ${totalPages}`;
+    }
+    
+    _renderListings() {
+        const grid = this._shadow.getElementById('listingsGrid');
+        grid.innerHTML = '';
+        
+        this._listings.forEach(listing => {
+            const card = document.createElement('div');
+            card.className = 'card';
+            
+            const badges = [];
+            if (listing.listingType === 'sale') badges.push('<span class="badge badge-sale">For Sale</span>');
+            if (listing.listingType === 'rent') badges.push('<span class="badge badge-rent">For Rent</span>');
+            if (listing.isFeatured) badges.push('<span class="badge badge-featured">⭐ Featured</span>');
+            
+            // Convert Wix image URL to WixStatic URL
+            const imageUrl = this._convertWixImageUrl(listing.thumbnailImage);
+            
+            card.innerHTML = `
+                <img src="${imageUrl}" alt="${listing.title}" class="card-img">
+                <div class="card-body">
+                    <div class="card-badges">${badges.join('')}</div>
+                    <div class="card-title">${listing.title}</div>
+                    <div class="card-location">📍 ${listing.location || 'Location not specified'}</div>
+                    <div class="card-price">${listing.currency || '$'}${this._formatNumber(listing.price || listing.monthlyRent || 0)}</div>
+                    <div class="card-features">
+                        ${listing.bedrooms ? `<div class="feature">🛏️ ${listing.bedrooms}</div>` : ''}
+                        ${listing.bathrooms ? `<div class="feature">🚿 ${listing.bathrooms}</div>` : ''}
+                        ${listing.squareFootage ? `<div class="feature">📐 ${this._formatNumber(listing.squareFootage)} sq ft</div>` : ''}
+                    </div>
+                    <div class="card-actions">
+                        <button class="btn btn-warning edit-btn">✏️ Edit</button>
+                        <button class="btn btn-danger delete-btn">🗑️ Delete</button>
+                    </div>
+                </div>
+            `;
+            
+            const editBtn = card.querySelector('.edit-btn');
+            const deleteBtn = card.querySelector('.delete-btn');
+            
+            editBtn.addEventListener('click', () => this._showForm(listing, true));
+            deleteBtn.addEventListener('click', () => this._deleteListing(listing));
+            
+            grid.appendChild(card);
+        });
+    }
+    
+    _showForm(listing, isEdit) {
+        console.log('🏠 Dashboard: Opening form', isEdit ? 'EDIT' : 'ADD');
+        
+        this._selectedListing = listing;
+        this._editMode = isEdit;
+        this._thumbnailFile = null;
+        this._galleryFiles = [];
+        
+        // Initialize form data
+        if (isEdit && listing) {
+            this._formData = { ...listing };
+            // Ensure relatedProperties is an array
+            if (!this._formData.relatedProperties) {
+                this._formData.relatedProperties = [];
+            }
+        } else {
+            this._formData = {
+                title: '',
+                location: '',
+                propertyType: '',
+                listingType: 'sale',
+                price: '',
+                bedrooms: '',
+                bathrooms: '',
+                squareFootage: '',
+                relatedProperties: []
+            };
+        }
+        
+        // Update modal title
+        this._shadow.getElementById('modalTitle').textContent = 
+            isEdit ? 'Edit Listing - ' + listing.title : 'Add New Listing';
+        
+        // Render form
+        this._renderForm();
+        
+        // Show modal
+        this._shadow.getElementById('modal').classList.add('active');
+        
+        // Load related listings options AFTER modal is shown and form is rendered
+        setTimeout(() => {
+            this._loadRelatedListingsOptions();
+        }, 100);
+    }
+    
+    _renderForm() {
+        const formBody = this._shadow.getElementById('formBody');
+        
+        formBody.innerHTML = `
+            <!-- Basic Information -->
+            <div class="form-section">
+                <div class="section-title">📋 Basic Information</div>
                 
-                <!-- Notification -->
-                <div class="notification" id="notification"></div>
+                <div class="form-group">
+                    <label class="label required">Property Title</label>
+                    <input type="text" class="input" id="title" value="${this._formData.title || ''}" placeholder="Beautiful 3BR Home in Downtown">
+                </div>
+                
+                <div class="form-group">
+                    <label class="label">Auto-Generated Slug (Read-only)</label>
+                    <input type="text" class="input" id="slug" value="${this._formData.slug || ''}" disabled>
+                    <div class="help-text">Slug is automatically generated from the title</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="label required">Description</label>
+                    <textarea class="textarea" id="description" rows="6" placeholder="Describe the property in detail...">${this._formData.description || ''}</textarea>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label required">Full Address</label>
+                        <input type="text" class="input" id="location" value="${this._formData.location || ''}" placeholder="123 Main St, City, State ZIP, Country">
+                        <div class="help-text">Enter complete address for Google Maps compatibility (Street, City, State/Province, ZIP/Postal Code, Country)</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label required">Property Type</label>
+                        <select class="select" id="propertyType">
+                            <option value="">-- Select --</option>
+                            <option value="house" ${this._formData.propertyType === 'house' ? 'selected' : ''}>House</option>
+                            <option value="apartment" ${this._formData.propertyType === 'apartment' ? 'selected' : ''}>Apartment</option>
+                            <option value="condo" ${this._formData.propertyType === 'condo' ? 'selected' : ''}>Condo</option>
+                            <option value="townhouse" ${this._formData.propertyType === 'townhouse' ? 'selected' : ''}>Townhouse</option>
+                            <option value="land" ${this._formData.propertyType === 'land' ? 'selected' : ''}>Land</option>
+                            <option value="commercial" ${this._formData.propertyType === 'commercial' ? 'selected' : ''}>Commercial</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label required">Listing Type</label>
+                        <select class="select" id="listingType">
+                            <option value="sale" ${this._formData.listingType === 'sale' ? 'selected' : ''}>For Sale</option>
+                            <option value="rent" ${this._formData.listingType === 'rent' ? 'selected' : ''}>For Rent</option>
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Condition</label>
+                        <select class="select" id="condition">
+                            <option value="">-- Select --</option>
+                            <option value="new" ${this._formData.condition === 'new' ? 'selected' : ''}>New</option>
+                            <option value="excellent" ${this._formData.condition === 'excellent' ? 'selected' : ''}>Excellent</option>
+                            <option value="good" ${this._formData.condition === 'good' ? 'selected' : ''}>Good</option>
+                            <option value="fair" ${this._formData.condition === 'fair' ? 'selected' : ''}>Fair</option>
+                            <option value="needswork" ${this._formData.condition === 'needswork' ? 'selected' : ''}>Needs Work</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Images -->
+            <div class="form-section">
+                <div class="section-title">🖼️ Images</div>
+                
+                <div class="form-group">
+                    <label class="label required">Thumbnail Image</label>
+                    <input type="file" class="file-input" id="thumbnailInput" accept="image/*">
+                    <label for="thumbnailInput" class="file-label">
+                        <span style="font-size: 32px;">🏠</span>
+                        <div>
+                            <div style="font-weight: 600;">Click to upload thumbnail</div>
+                            <div style="font-size: 12px; color: #6b7280;">Recommended: 1200x800px</div>
+                        </div>
+                    </label>
+                    <div class="file-preview ${this._formData.thumbnailImage ? 'active' : ''}" id="thumbnailPreview">
+                        ${this._formData.thumbnailImage ? `<img src="${this._convertWixImageUrl(this._formData.thumbnailImage)}" class="preview-img">` : ''}
+                    </div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="label">Gallery Images (Multiple)</label>
+                    <input type="file" class="file-input" id="galleryInput" accept="image/*" multiple>
+                    <label for="galleryInput" class="file-label">
+                        <span style="font-size: 32px;">📸</span>
+                        <div>
+                            <div style="font-weight: 600;">Click to upload gallery images</div>
+                            <div style="font-size: 12px; color: #6b7280;">You can select multiple images</div>
+                        </div>
+                    </label>
+                    <div class="gallery-preview" id="galleryPreview">
+                        ${this._formData.galleryImages && this._formData.galleryImages.length > 0 ? 
+                            this._formData.galleryImages.map((img, idx) => {
+                                const imgUrl = typeof img === 'string' ? img : img.src;
+                                return `
+                                    <div class="gallery-item">
+                                        <img src="${this._convertWixImageUrl(imgUrl)}">
+                                    </div>
+                                `;
+                            }).join('') : ''
+                        }
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Pricing -->
+            <div class="form-section">
+                <div class="section-title">💰 Pricing</div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="label required">Price / Rent</label>
+                        <input type="number" class="input" id="price" value="${this._formData.price || ''}" placeholder="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Currency</label>
+                        <select class="select" id="currency">
+                            ${this._getAllCurrencies()}
+                        </select>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">HOA Fee</label>
+                        <input type="number" class="input" id="hoaFee" value="${this._formData.hoaFee || ''}" placeholder="0">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Property Tax</label>
+                        <input type="number" class="input" id="propertyTax" value="${this._formData.propertyTax || ''}" placeholder="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Price Valid Until</label>
+                        <input type="date" class="input" id="priceValidUntil" value="${this._formData.priceValidUntil || ''}">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Property Details -->
+            <div class="form-section">
+                <div class="section-title">🏡 Property Details</div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="label">Bedrooms</label>
+                        <input type="number" class="input" id="bedrooms" value="${this._formData.bedrooms || ''}" min="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Bathrooms</label>
+                        <input type="number" class="input" id="bathrooms" value="${this._formData.bathrooms || ''}" min="0" step="0.5">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Total Rooms</label>
+                        <input type="number" class="input" id="totalRooms" value="${this._formData.totalRooms || ''}" min="0">
+                    </div>
+                </div>
+                
+                <div class="form-row-3">
+                    <div class="form-group">
+                        <label class="label">Square Footage</label>
+                        <input type="number" class="input" id="squareFootage" value="${this._formData.squareFootage || ''}" placeholder="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Lot Size</label>
+                        <input type="number" class="input" id="lotSize" value="${this._formData.lotSize || ''}" placeholder="0">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Garage Spaces</label>
+                        <input type="number" class="input" id="garageSpaces" value="${this._formData.garageSpaces || ''}" min="0">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Year Built</label>
+                        <input type="number" class="input" id="yearBuilt" value="${this._formData.yearBuilt || ''}" min="1800" max="2100">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Days on Market</label>
+                        <input type="number" class="input" id="daysOnMarket" value="${this._formData.daysOnMarket || ''}" min="0">
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Features & Amenities -->
+            <div class="form-section">
+                <div class="section-title">✨ Features & Amenities</div>
+                
+                <div class="checkbox-group">
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isFeatured" ${this._formData.isFeatured ? 'checked' : ''}>
+                        ⭐ Featured Listing
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isNewConstruction" ${this._formData.isNewConstruction ? 'checked' : ''}>
+                        🏗️ New Construction
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isForeclosure" ${this._formData.isForeclosure ? 'checked' : ''}>
+                        🏦 Foreclosure
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isShortSale" ${this._formData.isShortSale ? 'checked' : ''}>
+                        💰 Short Sale
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isPriceReduced" ${this._formData.isPriceReduced ? 'checked' : ''}>
+                        📉 Price Reduced
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isOpenHouse" ${this._formData.isOpenHouse ? 'checked' : ''}>
+                        🏡 Open House
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="isVirtualTour" ${this._formData.isVirtualTour ? 'checked' : ''}>
+                        🎥 Virtual Tour Available
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPool" ${this._formData.hasPool ? 'checked' : ''}>
+                        🏊 Pool
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGarage" ${this._formData.hasGarage ? 'checked' : ''}>
+                        🚗 Garage
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasBasement" ${this._formData.hasBasement ? 'checked' : ''}>
+                        🏠 Basement
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasAttic" ${this._formData.hasAttic ? 'checked' : ''}>
+                        🏚️ Attic
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasFireplace" ${this._formData.hasFireplace ? 'checked' : ''}>
+                        🔥 Fireplace
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasBalcony" ${this._formData.hasBalcony ? 'checked' : ''}>
+                        🌅 Balcony
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGarden" ${this._formData.hasGarden ? 'checked' : ''}>
+                        🌳 Garden
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasAirConditioning" ${this._formData.hasAirConditioning ? 'checked' : ''}>
+                        ❄️ Air Conditioning
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasHeating" ${this._formData.hasHeating ? 'checked' : ''}>
+                        🔥 Heating
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasWasherDryer" ${this._formData.hasWasherDryer ? 'checked' : ''}>
+                        🧺 Washer/Dryer
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasDishwasher" ${this._formData.hasDishwasher ? 'checked' : ''}>
+                        🍽️ Dishwasher
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasUpdatedKitchen" ${this._formData.hasUpdatedKitchen ? 'checked' : ''}>
+                        🍳 Updated Kitchen
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasUpdatedBathroom" ${this._formData.hasUpdatedBathroom ? 'checked' : ''}>
+                        🚿 Updated Bathroom
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasHardwoodFloors" ${this._formData.hasHardwoodFloors ? 'checked' : ''}>
+                        🪵 Hardwood Floors
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasWalkInCloset" ${this._formData.hasWalkInCloset ? 'checked' : ''}>
+                        👔 Walk-in Closet
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasMasterSuite" ${this._formData.hasMasterSuite ? 'checked' : ''}>
+                        🛏️ Master Suite
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasLaundryRoom" ${this._formData.hasLaundryRoom ? 'checked' : ''}>
+                        🧺 Laundry Room
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPantry" ${this._formData.hasPantry ? 'checked' : ''}>
+                        🥫 Pantry
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasOffice" ${this._formData.hasOffice ? 'checked' : ''}>
+                        💼 Home Office
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasSecurity" ${this._formData.hasSecurity ? 'checked' : ''}>
+                        🔒 Security System
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasSolarPanels" ${this._formData.hasSolarPanels ? 'checked' : ''}>
+                        ☀️ Solar Panels
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasSmartHome" ${this._formData.hasSmartHome ? 'checked' : ''}>
+                        🏠 Smart Home
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGym" ${this._formData.hasGym ? 'checked' : ''}>
+                        💪 Gym
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasWinecellar" ${this._formData.hasWinecellar ? 'checked' : ''}>
+                        🍷 Wine Cellar
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasElevator" ${this._formData.hasElevator ? 'checked' : ''}>
+                        🛗 Elevator
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPetFriendly" ${this._formData.hasPetFriendly ? 'checked' : ''}>
+                        🐕 Pet Friendly
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGatedCommunity" ${this._formData.hasGatedCommunity ? 'checked' : ''}>
+                        🚧 Gated Community
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasClubhouse" ${this._formData.hasClubhouse ? 'checked' : ''}>
+                        🏛️ Clubhouse
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPlayground" ${this._formData.hasPlayground ? 'checked' : ''}>
+                        🎪 Playground
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasTennisaccess" ${this._formData.hasTennisaccess ? 'checked' : ''}>
+                        🎾 Tennis Courts
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasWaterfront" ${this._formData.hasWaterfront ? 'checked' : ''}>
+                        🌊 Waterfront
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGolfCourse" ${this._formData.hasGolfCourse ? 'checked' : ''}>
+                        ⛳ Golf Course Access
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasMountainView" ${this._formData.hasMountainView ? 'checked' : ''}>
+                        ⛰️ Mountain View
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasCityView" ${this._formData.hasCityView ? 'checked' : ''}>
+                        🏙️ City View
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasOceanView" ${this._formData.hasOceanView ? 'checked' : ''}>
+                        🌅 Ocean View
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasPrivateBeach" ${this._formData.hasPrivateBeach ? 'checked' : ''}>
+                        🏖️ Private Beach
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasBoatDock" ${this._formData.hasBoatDock ? 'checked' : ''}>
+                        ⛵ Boat Dock
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasGuestHouse" ${this._formData.hasGuestHouse ? 'checked' : ''}>
+                        🏠 Guest House
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasInLawSuite" ${this._formData.hasInLawSuite ? 'checked' : ''}>
+                        👵 In-Law Suite
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasHandicapAccessible" ${this._formData.hasHandicapAccessible ? 'checked' : ''}>
+                        ♿ Handicap Accessible
+                    </label>
+                    <label class="checkbox-label">
+                        <input type="checkbox" class="checkbox" id="hasRentToOwn" ${this._formData.hasRentToOwn ? 'checked' : ''}>
+                        🏡 Rent to Own Option
+                    </label>
+                </div>
+            </div>
+            
+            <!-- Additional Details -->
+            <div class="form-section">
+                <div class="section-title">📝 Additional Details</div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Architecture</label>
+                        <input type="text" class="input" id="architecture" value="${this._formData.architecture || ''}" placeholder="Colonial, Modern, etc.">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Heating Type</label>
+                        <input type="text" class="input" id="heating" value="${this._formData.heating || ''}" placeholder="Gas, Electric, etc.">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Cooling Type</label>
+                        <input type="text" class="input" id="cooling" value="${this._formData.cooling || ''}" placeholder="Central, Wall Unit, etc.">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Flooring</label>
+                        <input type="text" class="input" id="flooring" value="${this._formData.flooring || ''}" placeholder="Hardwood, Carpet, Tile">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Foundation</label>
+                        <input type="text" class="input" id="foundation" value="${this._formData.foundation || ''}" placeholder="Concrete Slab, Crawl Space, Basement">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Roof</label>
+                        <input type="text" class="input" id="roof" value="${this._formData.roof || ''}" placeholder="Asphalt Shingle, Tile, Metal">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Exterior Material</label>
+                        <input type="text" class="input" id="exteriorMaterial" value="${this._formData.exteriorMaterial || ''}" placeholder="Brick, Vinyl Siding, Stucco">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Appliances</label>
+                        <input type="text" class="input" id="appliances" value="${this._formData.appliances || ''}" placeholder="Refrigerator, Stove, Dishwasher">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Utilities</label>
+                        <input type="text" class="input" id="utilities" value="${this._formData.utilities || ''}" placeholder="Electric, Gas, Water, Sewer">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">Occupancy Status</label>
+                        <input type="text" class="input" id="occupancy" value="${this._formData.occupancy || ''}" placeholder="Owner Occupied, Vacant, Tenant">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Availability</label>
+                        <input type="text" class="input" id="availability" value="${this._formData.availability || ''}" placeholder="Immediate, 30 Days, 60 Days">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label class="label">School District</label>
+                        <input type="text" class="input" id="schoolDistrict" value="${this._formData.schoolDistrict || ''}" placeholder="District Name">
+                    </div>
+                </div>
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label class="label">Zoning</label>
+                        <input type="text" class="input" id="zoning" value="${this._formData.zoning || ''}" placeholder="Residential, Commercial">
+                    </div>
+                    
+                    <div class="form-group">
+                        <!-- Empty for layout -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Related Listings -->
+            <div class="form-section">
+                <div class="section-title">🔗 Related Listings</div>
+                
+                <div class="form-group">
+                    <label class="label">Related Properties</label>
+                    <div id="relatedListingsContainer" style="border: 2px solid #e5e7eb; border-radius: 8px; padding: 16px; background: #f9fafb; min-height: 200px; max-height: 300px; overflow-y: auto;">
+                        <div style="text-align: center; color: #6b7280; padding: 40px 20px;">
+                            Loading available listings...
+                        </div>
+                    </div>
+                    <div class="help-text">Select properties that are related or similar to this listing</div>
+                </div>
+            </div>
+            
+            <!-- SEO -->
+            <div class="form-section">
+                <div class="section-title">🔍 SEO Settings</div>
+                
+                <div class="form-group">
+                    <label class="label">SEO Title</label>
+                    <input type="text" class="input" id="seoTitle" value="${this._formData.seoTitle || ''}" placeholder="Leave empty to use property title" maxlength="60">
+                    <div class="help-text">Recommended: 50-60 characters</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="label">SEO Description</label>
+                    <textarea class="textarea" id="seoDescription" rows="3" maxlength="160" placeholder="Brief description for search engines">${this._formData.seoDescription || ''}</textarea>
+                    <div class="help-text">Recommended: 150-160 characters</div>
+                </div>
+                
+                <div class="form-group">
+                    <label class="label">SEO Keywords</label>
+                    <input type="text" class="input" id="seoKeywords" value="${this._formData.seoKeywords || ''}" placeholder="keyword1, keyword2, keyword3">
+                </div>
+                
+                <div class="form-group">
+                    <label class="label">SEO Open Graph Image URL</label>
+                    <input type="url" class="input" id="seoOgImage" value="${this._formData.seoOgImage || ''}" placeholder="https://example.com/image.jpg">
+                    <div class="help-text">Image URL for social media sharing (Facebook, Twitter, LinkedIn)</div>
+                </div>
             </div>
         `;
+        
+        // Set up file input listeners
+        this._setupFormListeners();
+        
+        // Set currency value after render
+        setTimeout(() => {
+            const currencySelect = this._shadow.getElementById('currency');
+            if (currencySelect) {
+                currencySelect.value = this._formData.currency || '$';
+            }
+        }, 0);
     }
     
-    attachEventListeners() {
-        // Modal controls
-        this.querySelector('#addListingBtn').addEventListener('click', () => {
-            this.openModal();
+    _setupFormListeners() {
+        // Title → Slug auto-generation
+        const titleInput = this._shadow.getElementById('title');
+        const slugInput = this._shadow.getElementById('slug');
+        
+        titleInput.addEventListener('input', (e) => {
+            const slug = this._generateSlug(e.target.value);
+            slugInput.value = slug;
+            this._formData.slug = slug;
         });
         
-        this.querySelector('#closeModalBtn').addEventListener('click', () => {
-            this.closeModal();
+        // Thumbnail upload
+        this._shadow.getElementById('thumbnailInput').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                this._thumbnailFile = file;
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const preview = this._shadow.getElementById('thumbnailPreview');
+                    preview.innerHTML = `<img src="${event.target.result}" class="preview-img">`;
+                    preview.classList.add('active');
+                };
+                reader.readAsDataURL(file);
+            }
         });
         
-        this.querySelector('#cancelBtn').addEventListener('click', () => {
-            this.closeModal();
-        });
-        
-        // Refresh button
-        this.querySelector('#refreshBtn').addEventListener('click', () => {
-            this.dispatchEvent(new CustomEvent('refresh-listings'));
-        });
-        
-        // Form submission
-        this.querySelector('#listingForm').addEventListener('submit', (e) => {
-            e.preventDefault();
-            this.saveListing();
-        });
-        
-        // Title to slug generation
-        this.querySelector('#title').addEventListener('input', (e) => {
-            const slug = this.generateSlug(e.target.value);
-            this.querySelector('#slug').value = slug;
-        });
-        
-        // Image uploads
-        this.querySelector('#thumbnailInput').addEventListener('change', (e) => {
-            this.handleThumbnailUpload(e.target.files);
-        });
-        
-        this.querySelector('#galleryInput').addEventListener('change', (e) => {
-            this.handleGalleryUpload(e.target.files);
-        });
-        
-        this.querySelector('#seoOgImageInput').addEventListener('change', (e) => {
-            this.handleSeoOgImageUpload(e.target.files);
+        // Gallery upload
+        this._shadow.getElementById('galleryInput').addEventListener('change', (e) => {
+            const files = Array.from(e.target.files);
+            this._galleryFiles = files;
+            
+            const preview = this._shadow.getElementById('galleryPreview');
+            preview.innerHTML = '';
+            
+            files.forEach((file, index) => {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const item = document.createElement('div');
+                    item.className = 'gallery-item';
+                    item.innerHTML = `
+                        <img src="${event.target.result}">
+                        <button class="gallery-remove" data-index="${index}">×</button>
+                    `;
+                    
+                    item.querySelector('.gallery-remove').addEventListener('click', () => {
+                        this._galleryFiles.splice(index, 1);
+                        this._shadow.getElementById('galleryInput').dispatchEvent(new Event('change'));
+                    });
+                    
+                    preview.appendChild(item);
+                };
+                reader.readAsDataURL(file);
+            });
         });
     }
     
-    generateSlug(text) {
-        return text
+    _generateSlug(title) {
+        return title
             .toLowerCase()
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
-            .replace(/^-+|-+$/g, '');
+            .substring(0, 100)
+            .replace(/^-+|-+$/g, '');  // Remove leading and trailing hyphens AFTER substring
     }
     
-    openModal(listing = null) {
-        this.currentListing = listing;
-        const modal = this.querySelector('#listingModal');
-        const modalTitle = this.querySelector('#modalTitle');
+    _collectFormData() {
+        const formBody = this._shadow.getElementById('formBody');
         
-        if (listing) {
-            modalTitle.textContent = 'Edit Listing';
-            this.populateForm(listing);
-        } else {
-            modalTitle.textContent = 'Add New Listing';
-            this.querySelector('#listingForm').reset();
-            this.querySelector('#thumbnailPreview').innerHTML = '';
-            this.querySelector('#galleryPreview').innerHTML = '';
-            this.querySelector('#seoOgImagePreview').innerHTML = '';
-            this.currentThumbnail = null;
-            this.currentGallery = [];
-            this.currentSeoOgImage = null;
-        }
-        
-        modal.classList.add('active');
-        
-        // Load all listings for related selection
-        this.dispatchEvent(new CustomEvent('load-all-listings-for-selection'));
-    }
-    
-    closeModal() {
-        const modal = this.querySelector('#listingModal');
-        modal.classList.remove('active');
-        this.currentListing = null;
-    }
-    
-    populateForm(listing) {
-        // Basic info
-        this.querySelector('#title').value = listing.title || '';
-        this.querySelector('#slug').value = listing.slug || '';
-        this.querySelector('#description').value = listing.description || '';
-        
-        // Address - parse the address object
-        if (listing.location && typeof listing.location === 'object') {
-            this.querySelector('#addressFormatted').value = listing.location.formatted || '';
-            this.querySelector('#addressLatitude').value = listing.location.location?.latitude || '';
-            this.querySelector('#addressLongitude').value = listing.location.location?.longitude || '';
-            this.querySelector('#addressCity').value = listing.location.city || '';
-            this.querySelector('#addressState').value = listing.location.state || '';
-            this.querySelector('#addressCountry').value = listing.location.country || '';
-            this.querySelector('#addressPostalCode').value = listing.location.postalCode || '';
-        } else if (typeof listing.location === 'string') {
-            // Fallback for string location
-            this.querySelector('#addressFormatted').value = listing.location || '';
-        }
-        
-        // Property details
-        this.querySelector('#propertyType').value = listing.propertyType || '';
-        this.querySelector('#listingType').value = listing.listingType || 'sale';
-        this.querySelector('#condition').value = listing.condition || '';
-        this.querySelector('#yearBuilt').value = listing.yearBuilt || '';
-        this.querySelector('#bedrooms').value = listing.bedrooms || '';
-        this.querySelector('#bathrooms').value = listing.bathrooms || '';
-        this.querySelector('#squareFootage').value = listing.squareFootage || '';
-        this.querySelector('#lotSize').value = listing.lotSize || '';
-        this.querySelector('#totalRooms').value = listing.totalRooms || '';
-        this.querySelector('#garageSpaces').value = listing.garageSpaces || '';
-        
-        // Pricing
-        this.querySelector('#price').value = listing.price || '';
-        this.querySelector('#currency').value = listing.currency || 'USD';
-        this.querySelector('#hoaFee').value = listing.hoaFee || '';
-        this.querySelector('#propertyTax').value = listing.propertyTax || '';
-        this.querySelector('#priceValidUntil').value = listing.priceValidUntil || '';
-        
-        // Images
-        this.currentThumbnail = listing.thumbnailImage;
-        this.currentGallery = listing.galleryImages || [];
-        this.currentSeoOgImage = listing.seoOgImage;
-        
-        // Show existing thumbnail
-        if (listing.thumbnailImage) {
-            this.showExistingImage(listing.thumbnailImage, 'thumbnailPreview', 'thumbnail');
-        }
-        
-        // Show existing gallery
-        if (listing.galleryImages && listing.galleryImages.length > 0) {
-            listing.galleryImages.forEach((img, index) => {
-                this.showExistingImage(img, 'galleryPreview', 'gallery', index);
-            });
-        }
-        
-        // Show existing SEO OG image
-        if (listing.seoOgImage) {
-            this.showExistingImage(listing.seoOgImage, 'seoOgImagePreview', 'seoOgImage');
-        }
-        
-        // Checkboxes
-        const checkboxes = [
-            'isFeatured', 'isNewConstruction', 'isForeclosure', 'isShortSale',
-            'isPriceReduced', 'isOpenHouse', 'isVirtualTour', 'hasPool', 'hasGarage',
-            'hasBasement', 'hasAttic', 'hasFireplace', 'hasBalcony', 'hasGarden',
-            'hasSecurity', 'hasAirConditioning', 'hasHeating', 'hasWasherDryer',
-            'hasDishwasher', 'hasUpdatedKitchen', 'hasUpdatedBathroom', 'hasHardwoodFloors',
-            'hasWalkInCloset', 'hasMasterSuite', 'hasLaundryRoom', 'hasPantry',
-            'hasOffice', 'hasGym', 'hasWinecellar', 'hasElevator', 'hasSolarPanels',
-            'hasSmartHome', 'hasWaterfront', 'hasGolfCourse', 'hasMountainView',
-            'hasCityView', 'hasOceanView', 'hasPrivateBeach', 'hasBoatDock',
-            'hasGuestHouse', 'hasInLawSuite', 'hasGatedCommunity', 'hasClubhouse',
-            'hasPlayground', 'hasTennisaccess', 'hasPetFriendly', 'hasHandicapAccessible',
-            'hasRentToOwn'
-        ];
-        
-        checkboxes.forEach(id => {
-            const checkbox = this.querySelector(`#${id}`);
-            if (checkbox) {
-                checkbox.checked = listing[id] || false;
-            }
-        });
-        
-        // Additional details
-        this.querySelector('#architecture').value = listing.architecture || '';
-        this.querySelector('#heating').value = listing.heating || '';
-        this.querySelector('#cooling').value = listing.cooling || '';
-        this.querySelector('#flooring').value = listing.flooring || '';
-        this.querySelector('#schoolDistrict').value = listing.schoolDistrict || '';
-        this.querySelector('#zoning').value = listing.zoning || '';
-        this.querySelector('#daysOnMarket').value = listing.daysOnMarket || '';
-        
-        // SEO
-        this.querySelector('#seoTitle').value = listing.seoTitle || '';
-        this.querySelector('#seoDescription').value = listing.seoDescription || '';
-        this.querySelector('#seoKeywords').value = listing.seoKeywords || '';
-    }
-    
-    showExistingImage(imageUrl, containerId, type, index = null) {
-        const container = this.querySelector(`#${containerId}`);
-        
-        const imageItem = document.createElement('div');
-        imageItem.className = 'image-preview-item';
-        imageItem.dataset.type = type;
-        if (index !== null) {
-            imageItem.dataset.index = index;
-        }
-        
-        const img = document.createElement('img');
-        img.src = imageUrl;
-        
-        const deleteBtn = document.createElement('button');
-        deleteBtn.className = 'image-delete-btn';
-        deleteBtn.innerHTML = '×';
-        deleteBtn.type = 'button';
-        deleteBtn.addEventListener('click', () => {
-            if (type === 'thumbnail') {
-                this.currentThumbnail = null;
-            } else if (type === 'gallery') {
-                this.currentGallery = this.currentGallery.filter((_, i) => i !== index);
-            } else if (type === 'seoOgImage') {
-                this.currentSeoOgImage = null;
-            }
-            imageItem.remove();
-        });
-        
-        imageItem.appendChild(img);
-        imageItem.appendChild(deleteBtn);
-        container.appendChild(imageItem);
-    }
-    
-    handleThumbnailUpload(files) {
-        if (!files || files.length === 0) return;
-        
-        const file = files[0];
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-            const preview = this.querySelector('#thumbnailPreview');
-            preview.innerHTML = '';
+        const data = {
+            title: formBody.querySelector('#title')?.value.trim() || '',
+            slug: formBody.querySelector('#slug')?.value.trim() || '',
+            description: formBody.querySelector('#description')?.value.trim() || '',
+            location: formBody.querySelector('#location')?.value.trim() || '',
+            propertyType: formBody.querySelector('#propertyType')?.value || '',
+            listingType: formBody.querySelector('#listingType')?.value || 'sale',
+            condition: formBody.querySelector('#condition')?.value || '',
+            yearBuilt: formBody.querySelector('#yearBuilt')?.value || null,
+            bedrooms: formBody.querySelector('#bedrooms')?.value || null,
+            bathrooms: formBody.querySelector('#bathrooms')?.value || null,
+            squareFootage: formBody.querySelector('#squareFootage')?.value || null,
+            lotSize: formBody.querySelector('#lotSize')?.value || null,
+            totalRooms: formBody.querySelector('#totalRooms')?.value || null,
+            garageSpaces: formBody.querySelector('#garageSpaces')?.value || null,
+            price: formBody.querySelector('#price')?.value || null,
+            currency: formBody.querySelector('#currency')?.value || '$',
+            hoaFee: formBody.querySelector('#hoaFee')?.value || null,
+            propertyTax: formBody.querySelector('#propertyTax')?.value || null,
+            priceValidUntil: formBody.querySelector('#priceValidUntil')?.value || null,
+            daysOnMarket: formBody.querySelector('#daysOnMarket')?.value || null,
             
-            const imageItem = document.createElement('div');
-            imageItem.className = 'image-preview-item';
+            // Checkboxes
+            isFeatured: formBody.querySelector('#isFeatured')?.checked || false,
+            isNewConstruction: formBody.querySelector('#isNewConstruction')?.checked || false,
+            isForeclosure: formBody.querySelector('#isForeclosure')?.checked || false,
+            isShortSale: formBody.querySelector('#isShortSale')?.checked || false,
+            isPriceReduced: formBody.querySelector('#isPriceReduced')?.checked || false,
+            isOpenHouse: formBody.querySelector('#isOpenHouse')?.checked || false,
+            isVirtualTour: formBody.querySelector('#isVirtualTour')?.checked || false,
+            hasPool: formBody.querySelector('#hasPool')?.checked || false,
+            hasGarage: formBody.querySelector('#hasGarage')?.checked || false,
+            hasBasement: formBody.querySelector('#hasBasement')?.checked || false,
+            hasAttic: formBody.querySelector('#hasAttic')?.checked || false,
+            hasFireplace: formBody.querySelector('#hasFireplace')?.checked || false,
+            hasBalcony: formBody.querySelector('#hasBalcony')?.checked || false,
+            hasGarden: formBody.querySelector('#hasGarden')?.checked || false,
+            hasAirConditioning: formBody.querySelector('#hasAirConditioning')?.checked || false,
+            hasHeating: formBody.querySelector('#hasHeating')?.checked || false,
+            hasWasherDryer: formBody.querySelector('#hasWasherDryer')?.checked || false,
+            hasDishwasher: formBody.querySelector('#hasDishwasher')?.checked || false,
+            hasUpdatedKitchen: formBody.querySelector('#hasUpdatedKitchen')?.checked || false,
+            hasUpdatedBathroom: formBody.querySelector('#hasUpdatedBathroom')?.checked || false,
+            hasHardwoodFloors: formBody.querySelector('#hasHardwoodFloors')?.checked || false,
+            hasWalkInCloset: formBody.querySelector('#hasWalkInCloset')?.checked || false,
+            hasMasterSuite: formBody.querySelector('#hasMasterSuite')?.checked || false,
+            hasLaundryRoom: formBody.querySelector('#hasLaundryRoom')?.checked || false,
+            hasPantry: formBody.querySelector('#hasPantry')?.checked || false,
+            hasOffice: formBody.querySelector('#hasOffice')?.checked || false,
+            hasSecurity: formBody.querySelector('#hasSecurity')?.checked || false,
+            hasSolarPanels: formBody.querySelector('#hasSolarPanels')?.checked || false,
+            hasSmartHome: formBody.querySelector('#hasSmartHome')?.checked || false,
+            hasGym: formBody.querySelector('#hasGym')?.checked || false,
+            hasWinecellar: formBody.querySelector('#hasWinecellar')?.checked || false,
+            hasElevator: formBody.querySelector('#hasElevator')?.checked || false,
+            hasPetFriendly: formBody.querySelector('#hasPetFriendly')?.checked || false,
+            hasGatedCommunity: formBody.querySelector('#hasGatedCommunity')?.checked || false,
+            hasClubhouse: formBody.querySelector('#hasClubhouse')?.checked || false,
+            hasPlayground: formBody.querySelector('#hasPlayground')?.checked || false,
+            hasTennisaccess: formBody.querySelector('#hasTennisaccess')?.checked || false,
+            hasWaterfront: formBody.querySelector('#hasWaterfront')?.checked || false,
+            hasGolfCourse: formBody.querySelector('#hasGolfCourse')?.checked || false,
+            hasMountainView: formBody.querySelector('#hasMountainView')?.checked || false,
+            hasCityView: formBody.querySelector('#hasCityView')?.checked || false,
+            hasOceanView: formBody.querySelector('#hasOceanView')?.checked || false,
+            hasPrivateBeach: formBody.querySelector('#hasPrivateBeach')?.checked || false,
+            hasBoatDock: formBody.querySelector('#hasBoatDock')?.checked || false,
+            hasGuestHouse: formBody.querySelector('#hasGuestHouse')?.checked || false,
+            hasInLawSuite: formBody.querySelector('#hasInLawSuite')?.checked || false,
+            hasHandicapAccessible: formBody.querySelector('#hasHandicapAccessible')?.checked || false,
+            hasRentToOwn: formBody.querySelector('#hasRentToOwn')?.checked || false,
             
-            const img = document.createElement('img');
-            img.src = e.target.result;
+            // Additional
+            architecture: formBody.querySelector('#architecture')?.value.trim() || '',
+            heating: formBody.querySelector('#heating')?.value.trim() || '',
+            cooling: formBody.querySelector('#cooling')?.value.trim() || '',
+            flooring: formBody.querySelector('#flooring')?.value.trim() || '',
+            foundation: formBody.querySelector('#foundation')?.value.trim() || '',
+            roof: formBody.querySelector('#roof')?.value.trim() || '',
+            exteriorMaterial: formBody.querySelector('#exteriorMaterial')?.value.trim() || '',
+            appliances: formBody.querySelector('#appliances')?.value.trim() || '',
+            utilities: formBody.querySelector('#utilities')?.value.trim() || '',
+            occupancy: formBody.querySelector('#occupancy')?.value.trim() || '',
+            availability: formBody.querySelector('#availability')?.value.trim() || '',
+            schoolDistrict: formBody.querySelector('#schoolDistrict')?.value.trim() || '',
+            zoning: formBody.querySelector('#zoning')?.value.trim() || '',
             
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'image-delete-btn';
-            deleteBtn.innerHTML = '×';
-            deleteBtn.type = 'button';
-            deleteBtn.addEventListener('click', () => {
-                preview.innerHTML = '';
-                this.querySelector('#thumbnailInput').value = '';
-            });
-            
-            imageItem.appendChild(img);
-            imageItem.appendChild(deleteBtn);
-            preview.appendChild(imageItem);
+            // SEO
+            seoTitle: formBody.querySelector('#seoTitle')?.value.trim() || '',
+            seoDescription: formBody.querySelector('#seoDescription')?.value.trim() || '',
+            seoKeywords: formBody.querySelector('#seoKeywords')?.value.trim() || '',
+            seoOgImage: formBody.querySelector('#seoOgImage')?.value.trim() || ''
         };
         
-        reader.readAsDataURL(file);
+        return data;
     }
     
-    handleGalleryUpload(files) {
-        if (!files || files.length === 0) return;
+    async _handleSave() {
+        console.log('🏠 Dashboard: Handling save');
         
-        const preview = this.querySelector('#galleryPreview');
+        const data = this._collectFormData();
         
-        Array.from(files).forEach((file, index) => {
-            const reader = new FileReader();
-            
-            reader.onload = (e) => {
-                const imageItem = document.createElement('div');
-                imageItem.className = 'image-preview-item';
-                imageItem.dataset.newImage = 'true';
-                imageItem.dataset.index = preview.children.length;
-                
-                const img = document.createElement('img');
-                img.src = e.target.result;
-                
-                const deleteBtn = document.createElement('button');
-                deleteBtn.className = 'image-delete-btn';
-                deleteBtn.innerHTML = '×';
-                deleteBtn.type = 'button';
-                deleteBtn.addEventListener('click', () => {
-                    imageItem.remove();
-                });
-                
-                imageItem.appendChild(img);
-                imageItem.appendChild(deleteBtn);
-                preview.appendChild(imageItem);
+        // Validation
+        if (!data.title) {
+            alert('❌ Please enter a property title');
+            return;
+        }
+        
+        if (!data.location) {
+            alert('❌ Please enter a location');
+            return;
+        }
+        
+        if (!data.propertyType) {
+            alert('❌ Please select a property type');
+            return;
+        }
+        
+        if (!data.price) {
+            alert('❌ Please enter a price');
+            return;
+        }
+        
+        if (!this._editMode && !this._thumbnailFile) {
+            alert('❌ Please upload a thumbnail image');
+            return;
+        }
+        
+        // Disable save button
+        const saveBtn = this._shadow.getElementById('saveBtn');
+        saveBtn.disabled = true;
+        saveBtn.textContent = 'Saving...';
+        
+        // Show progress section
+        const progressSection = this._shadow.getElementById('progressSection');
+        progressSection.classList.add('active');
+        
+        try {
+            // Prepare images for upload
+            const imageData = {
+                thumbnail: null,
+                gallery: []
             };
             
+            // Convert thumbnail to base64
+            if (this._thumbnailFile) {
+                imageData.thumbnail = await this._fileToBase64(this._thumbnailFile);
+            }
+            
+            // Convert gallery to base64
+            if (this._galleryFiles.length > 0) {
+                imageData.gallery = await Promise.all(
+                    this._galleryFiles.map(file => this._fileToBase64(file))
+                );
+            }
+            
+            console.log('🏠 Dashboard: Dispatching save event');
+            
+            this._dispatchEvent('save-listing', {
+                listingData: data,
+                imageData: imageData,
+                existingListing: this._editMode ? this._selectedListing : null
+            });
+            
+        } catch (error) {
+            console.error('🏠 Dashboard: Save error:', error);
+            this._showToast('error', 'Failed to prepare data: ' + error.message);
+            
+            saveBtn.disabled = false;
+            saveBtn.textContent = 'Save Listing';
+            progressSection.classList.remove('active');
+        }
+    }
+    
+    async _fileToBase64(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => {
+                const base64 = reader.result.split(',')[1];
+                resolve({
+                    data: base64,
+                    filename: file.name,
+                    mimeType: file.type
+                });
+            };
+            reader.onerror = reject;
             reader.readAsDataURL(file);
         });
     }
     
-    handleSeoOgImageUpload(files) {
-        if (!files || files.length === 0) return;
+    _updateUploadProgress(progress) {
+        const progressBar = this._shadow.getElementById('progressBar');
+        const progressLabel = this._shadow.getElementById('progressLabel');
+        const progressStatus = this._shadow.getElementById('progressStatus');
         
-        const file = files[0];
-        const reader = new FileReader();
-        
-        reader.onload = (e) => {
-            const preview = this.querySelector('#seoOgImagePreview');
-            preview.innerHTML = '';
-            
-            const imageItem = document.createElement('div');
-            imageItem.className = 'image-preview-item';
-            
-            const img = document.createElement('img');
-            img.src = e.target.result;
-            
-            const deleteBtn = document.createElement('button');
-            deleteBtn.className = 'image-delete-btn';
-            deleteBtn.innerHTML = '×';
-            deleteBtn.type = 'button';
-            deleteBtn.addEventListener('click', () => {
-                preview.innerHTML = '';
-                this.querySelector('#seoOgImageInput').value = '';
-            });
-            
-            imageItem.appendChild(img);
-            imageItem.appendChild(deleteBtn);
-            preview.appendChild(imageItem);
-        };
-        
-        reader.readAsDataURL(file);
+        if (progressBar) progressBar.style.width = progress.progress + '%';
+        if (progressLabel) progressLabel.textContent = progress.message || 'Uploading...';
+        if (progressStatus) progressStatus.textContent = Math.round(progress.progress) + '%';
     }
     
-    saveListing() {
-        const formData = {
-            title: this.querySelector('#title').value,
-            slug: this.querySelector('#slug').value,
-            description: this.querySelector('#description').value,
-            
-            // Address object structure
-            location: {
-                formatted: this.querySelector('#addressFormatted').value,
-                location: {
-                    latitude: parseFloat(this.querySelector('#addressLatitude').value),
-                    longitude: parseFloat(this.querySelector('#addressLongitude').value)
-                },
-                city: this.querySelector('#addressCity').value || '',
-                state: this.querySelector('#addressState').value || '',
-                country: this.querySelector('#addressCountry').value || '',
-                postalCode: this.querySelector('#addressPostalCode').value || ''
-            },
-            
-            propertyType: this.querySelector('#propertyType').value,
-            listingType: this.querySelector('#listingType').value,
-            condition: this.querySelector('#condition').value,
-            yearBuilt: this.querySelector('#yearBuilt').value,
-            bedrooms: this.querySelector('#bedrooms').value,
-            bathrooms: this.querySelector('#bathrooms').value,
-            squareFootage: this.querySelector('#squareFootage').value,
-            lotSize: this.querySelector('#lotSize').value,
-            totalRooms: this.querySelector('#totalRooms').value,
-            garageSpaces: this.querySelector('#garageSpaces').value,
-            price: this.querySelector('#price').value,
-            currency: this.querySelector('#currency').value,
-            hoaFee: this.querySelector('#hoaFee').value,
-            propertyTax: this.querySelector('#propertyTax').value,
-            priceValidUntil: this.querySelector('#priceValidUntil').value,
-            
-            // Checkboxes
-            isFeatured: this.querySelector('#isFeatured').checked,
-            isNewConstruction: this.querySelector('#isNewConstruction').checked,
-            isForeclosure: this.querySelector('#isForeclosure').checked,
-            isShortSale: this.querySelector('#isShortSale').checked,
-            isPriceReduced: this.querySelector('#isPriceReduced').checked,
-            isOpenHouse: this.querySelector('#isOpenHouse').checked,
-            isVirtualTour: this.querySelector('#isVirtualTour').checked,
-            hasPool: this.querySelector('#hasPool').checked,
-            hasGarage: this.querySelector('#hasGarage').checked,
-            hasBasement: this.querySelector('#hasBasement').checked,
-            hasAttic: this.querySelector('#hasAttic').checked,
-            hasFireplace: this.querySelector('#hasFireplace').checked,
-            hasBalcony: this.querySelector('#hasBalcony').checked,
-            hasGarden: this.querySelector('#hasGarden').checked,
-            hasSecurity: this.querySelector('#hasSecurity').checked,
-            hasAirConditioning: this.querySelector('#hasAirConditioning').checked,
-            hasHeating: this.querySelector('#hasHeating').checked,
-            hasWasherDryer: this.querySelector('#hasWasherDryer').checked,
-            hasDishwasher: this.querySelector('#hasDishwasher').checked,
-            hasUpdatedKitchen: this.querySelector('#hasUpdatedKitchen').checked,
-            hasUpdatedBathroom: this.querySelector('#hasUpdatedBathroom').checked,
-            hasHardwoodFloors: this.querySelector('#hasHardwoodFloors').checked,
-            hasWalkInCloset: this.querySelector('#hasWalkInCloset').checked,
-            hasMasterSuite: this.querySelector('#hasMasterSuite').checked,
-            hasLaundryRoom: this.querySelector('#hasLaundryRoom').checked,
-            hasPantry: this.querySelector('#hasPantry').checked,
-            hasOffice: this.querySelector('#hasOffice').checked,
-            hasGym: this.querySelector('#hasGym').checked,
-            hasWinecellar: this.querySelector('#hasWinecellar').checked,
-            hasElevator: this.querySelector('#hasElevator').checked,
-            hasSolarPanels: this.querySelector('#hasSolarPanels').checked,
-            hasSmartHome: this.querySelector('#hasSmartHome').checked,
-            hasWaterfront: this.querySelector('#hasWaterfront').checked,
-            hasGolfCourse: this.querySelector('#hasGolfCourse').checked,
-            hasMountainView: this.querySelector('#hasMountainView').checked,
-            hasCityView: this.querySelector('#hasCityView').checked,
-            hasOceanView: this.querySelector('#hasOceanView').checked,
-            hasPrivateBeach: this.querySelector('#hasPrivateBeach').checked,
-            hasBoatDock: this.querySelector('#hasBoatDock').checked,
-            hasGuestHouse: this.querySelector('#hasGuestHouse').checked,
-            hasInLawSuite: this.querySelector('#hasInLawSuite').checked,
-            hasGatedCommunity: this.querySelector('#hasGatedCommunity').checked,
-            hasClubhouse: this.querySelector('#hasClubhouse').checked,
-            hasPlayground: this.querySelector('#hasPlayground').checked,
-            hasTennisaccess: this.querySelector('#hasTennisaccess').checked,
-            hasPetFriendly: this.querySelector('#hasPetFriendly').checked,
-            hasHandicapAccessible: this.querySelector('#hasHandicapAccessible').checked,
-            hasRentToOwn: this.querySelector('#hasRentToOwn').checked,
-            
-            // Additional details
-            architecture: this.querySelector('#architecture').value,
-            heating: this.querySelector('#heating').value,
-            cooling: this.querySelector('#cooling').value,
-            flooring: this.querySelector('#flooring').value,
-            schoolDistrict: this.querySelector('#schoolDistrict').value,
-            zoning: this.querySelector('#zoning').value,
-            daysOnMarket: this.querySelector('#daysOnMarket').value,
-            
-            // SEO
-            seoTitle: this.querySelector('#seoTitle').value,
-            seoDescription: this.querySelector('#seoDescription').value,
-            seoKeywords: this.querySelector('#seoKeywords').value
-        };
-        
-        // Get image data
-        const imageData = {
-            thumbnail: null,
-            gallery: [],
-            seoOgImage: null,
-            existingThumbnail: this.currentThumbnail,
-            existingGallery: this.currentGallery,
-            existingSeoOgImage: this.currentSeoOgImage
-        };
-        
-        // Get new thumbnail
-        const thumbnailInput = this.querySelector('#thumbnailInput');
-        if (thumbnailInput.files.length > 0) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imageData.thumbnail = {
-                    data: e.target.result.split(',')[1],
-                    filename: thumbnailInput.files[0].name,
-                    mimeType: thumbnailInput.files[0].type
-                };
-                this.checkAndDispatchSave(formData, imageData);
-            };
-            reader.readAsDataURL(thumbnailInput.files[0]);
-        } else {
-            imageData.thumbnail = null;
-        }
-        
-        // Get new gallery images
-        const galleryInput = this.querySelector('#galleryInput');
-        const newGalleryImages = Array.from(galleryInput.files);
-        
-        if (newGalleryImages.length > 0) {
-            let loadedImages = 0;
-            
-            newGalleryImages.forEach(file => {
-                const reader = new FileReader();
-                reader.onload = (e) => {
-                    imageData.gallery.push({
-                        data: e.target.result.split(',')[1],
-                        filename: file.name,
-                        mimeType: file.type
-                    });
-                    
-                    loadedImages++;
-                    if (loadedImages === newGalleryImages.length) {
-                        this.checkAndDispatchSave(formData, imageData);
-                    }
-                };
-                reader.readAsDataURL(file);
-            });
-        }
-        
-        // Get new SEO OG image
-        const seoOgImageInput = this.querySelector('#seoOgImageInput');
-        if (seoOgImageInput.files.length > 0) {
-            const reader = new FileReader();
-            reader.onload = (e) => {
-                imageData.seoOgImage = {
-                    data: e.target.result.split(',')[1],
-                    filename: seoOgImageInput.files[0].name,
-                    mimeType: seoOgImageInput.files[0].type
-                };
-                this.checkAndDispatchSave(formData, imageData);
-            };
-            reader.readAsDataURL(seoOgImageInput.files[0]);
-        }
-        
-        // Get related listings
-        const relatedListings = [];
-        this.querySelectorAll('.related-listing-card input[type="checkbox"]:checked').forEach(checkbox => {
-            relatedListings.push(checkbox.value);
-        });
-        
-        formData.relatedListings = relatedListings;
-        
-        // If no new images, dispatch immediately
-        if (thumbnailInput.files.length === 0 && newGalleryImages.length === 0 && seoOgImageInput.files.length === 0) {
-            this.dispatchSaveEvent(formData, imageData);
-        }
-    }
-    
-    checkAndDispatchSave(formData, imageData) {
-        // This ensures all async file reads complete before dispatching
-        const thumbnailInput = this.querySelector('#thumbnailInput');
-        const galleryInput = this.querySelector('#galleryInput');
-        const seoOgImageInput = this.querySelector('#seoOgImageInput');
-        
-        const thumbnailReady = thumbnailInput.files.length === 0 || imageData.thumbnail !== null;
-        const galleryReady = galleryInput.files.length === 0 || imageData.gallery.length === galleryInput.files.length;
-        const seoOgImageReady = seoOgImageInput.files.length === 0 || imageData.seoOgImage !== null;
-        
-        if (thumbnailReady && galleryReady && seoOgImageReady) {
-            this.dispatchSaveEvent(formData, imageData);
-        }
-    }
-    
-    dispatchSaveEvent(formData, imageData) {
-        this.dispatchEvent(new CustomEvent('save-listing', {
-            detail: {
-                formData,
-                imageData,
-                existingId: this.currentListing ? this.currentListing._id : null
-            }
-        }));
-    }
-    
-    setListingData(listings) {
-        const container = this.querySelector('#listingsContainer');
-        container.innerHTML = '';
-        
-        if (!listings || listings.length === 0) {
-            container.innerHTML = `
-                <div class="empty-state">
-                    <div class="empty-state-icon">📭</div>
-                    <p>No listings found. Click "Add New Listing" to create one.</p>
-                </div>
-            `;
+    _deleteListing(listing) {
+        if (!confirm(`Delete "${listing.title}"?\n\nThis will permanently delete the listing and all associated images.`)) {
             return;
         }
         
-        listings.forEach(listing => {
-            const row = document.createElement('div');
-            row.className = 'listing-row';
-            
-            const imageUrl = listing.thumbnailImage || 'https://via.placeholder.com/60';
-            const price = listing.price ? `${listing.currency || '$'}${listing.price.toLocaleString()}` : 'N/A';
-            const details = `${listing.bedrooms || 0} bed, ${listing.bathrooms || 0} bath`;
-            
-            row.innerHTML = `
-                <div>
-                    <img src="${imageUrl}" class="listing-image" alt="${listing.title}">
-                </div>
-                <div>
-                    <div class="listing-title">${listing.title}</div>
-                    <div class="listing-location">${listing.location?.formatted || listing.location || 'N/A'}</div>
-                </div>
-                <div>
-                    <span class="badge ${listing.listingType === 'sale' ? 'badge-sale' : 'badge-rent'}">
-                        ${listing.listingType === 'sale' ? 'For Sale' : 'For Rent'}
-                    </span>
-                </div>
-                <div>${price}</div>
-                <div>${details}</div>
-                <div class="action-buttons">
-                    <button class="btn-small btn-edit" data-id="${listing._id}">✏️ Edit</button>
-                    <button class="btn-small btn-delete" data-id="${listing._id}">🗑️ Delete</button>
-                </div>
-            `;
-            
-            // Edit button
-            row.querySelector('.btn-edit').addEventListener('click', () => {
-                this.openModal(listing);
-            });
-            
-            // Delete button
-            row.querySelector('.btn-delete').addEventListener('click', () => {
-                if (confirm(`Are you sure you want to delete "${listing.title}"?`)) {
-                    this.dispatchEvent(new CustomEvent('delete-listing', {
-                        detail: {
-                            id: listing._id,
-                            title: listing.title
-                        }
-                    }));
-                }
-            });
-            
-            container.appendChild(row);
+        this._dispatchEvent('delete-listing', {
+            listing: listing
         });
     }
     
-    setAllListingsForSelection(listings) {
-        const container = this.querySelector('#relatedListingsContainer');
-        container.innerHTML = '';
+    _hideForm() {
+        this._shadow.getElementById('modal').classList.remove('active');
         
-        if (!listings || listings.length === 0) {
-            container.innerHTML = '<div class="loading">No listings available</div>';
-            return;
-        }
+        // Reset form
+        this._selectedListing = null;
+        this._editMode = false;
+        this._thumbnailFile = null;
+        this._galleryFiles = [];
+        this._formData = {};
         
-        const grid = document.createElement('div');
-        grid.className = 'related-listings-grid';
+        // Reset save button
+        const saveBtn = this._shadow.getElementById('saveBtn');
+        saveBtn.disabled = false;
+        saveBtn.textContent = 'Save Listing';
         
-        listings.forEach(listing => {
-            // Skip current listing
-            if (this.currentListing && listing._id === this.currentListing._id) {
-                return;
-            }
-            
-            const card = document.createElement('div');
-            card.className = 'related-listing-card';
-            
-            const isSelected = this.currentListing && 
-                               this.currentListing.relatedProperties && 
-                               this.currentListing.relatedProperties.includes(listing._id);
-            
-            if (isSelected) {
-                card.classList.add('selected');
-            }
-            
-            const imageUrl = listing.thumbnailImage || 'https://via.placeholder.com/200';
-            const price = listing.price ? `${listing.currency || '$'}${listing.price.toLocaleString()}` : 'N/A';
-            
-            card.innerHTML = `
-                <input type="checkbox" value="${listing._id}" ${isSelected ? 'checked' : ''}>
-                <img src="${imageUrl}" class="related-listing-image" alt="${listing.title}">
-                <div class="related-listing-title">${listing.title}</div>
-                <div class="related-listing-location">${listing.location?.formatted || listing.location || 'N/A'}</div>
-                <div class="related-listing-price">${price}</div>
-            `;
-            
-            // Toggle selection on card click
-            card.addEventListener('click', (e) => {
-                if (e.target.tagName !== 'INPUT') {
-                    const checkbox = card.querySelector('input[type="checkbox"]');
-                    checkbox.checked = !checkbox.checked;
-                    card.classList.toggle('selected', checkbox.checked);
-                }
-            });
-            
-            // Toggle selection on checkbox change
-            card.querySelector('input[type="checkbox"]').addEventListener('change', (e) => {
-                card.classList.toggle('selected', e.target.checked);
-            });
-            
-            grid.appendChild(card);
-        });
+        // Hide progress
+        const progressSection = this._shadow.getElementById('progressSection');
+        progressSection.classList.remove('active');
+    }
+    
+    _updateStats() {
+        this._shadow.getElementById('totalListings').textContent = this._totalListings;
         
-        container.appendChild(grid);
+        // Count from ALL listings (not just current page)
+        // We need to dispatch an event to get counts from backend
+        this._dispatchEvent('get-listing-counts', {});
     }
     
     setListingCounts(counts) {
-        this.querySelector('#totalListings').textContent = counts.totalListings || 0;
-        this.querySelector('#forSaleCount').textContent = counts.byListingType?.sale || 0;
-        this.querySelector('#forRentCount').textContent = counts.byListingType?.rent || 0;
+        this._shadow.getElementById('forSale').textContent = counts.forSale || 0;
+        this._shadow.getElementById('forRent').textContent = counts.forRent || 0;
+        this._shadow.getElementById('featured').textContent = counts.featured || 0;
     }
     
-    updateProgress(progress, message) {
-        const container = this.querySelector('#progressBarContainer');
-        const bar = this.querySelector('#progressBar');
-        const messageEl = this.querySelector('#progressMessage');
+    _showToast(type, message) {
+        const toast = this._shadow.getElementById('toast');
+        toast.textContent = message;
+        toast.className = `toast toast-${type} show`;
+        setTimeout(() => toast.classList.remove('show'), 5000);
+    }
+    
+    _formatNumber(num) {
+        return new Intl.NumberFormat('en-US').format(num);
+    }
+    
+    _convertWixImageUrl(url) {
+        if (!url) return 'https://via.placeholder.com/400x300';
         
-        if (progress > 0 && progress < 100) {
-            container.classList.add('active');
-            bar.style.width = progress + '%';
-            messageEl.textContent = message || '';
-        } else {
-            setTimeout(() => {
-                container.classList.remove('active');
-            }, 500);
+        // If already a full URL, return as is
+        if (url.startsWith('http://') || url.startsWith('https://')) {
+            return url;
+        }
+        
+        // Convert wix:image:// format to WixStatic URL
+        if (url.startsWith('wix:image://')) {
+            // Extract the image ID from wix:image://v1/{imageId}/{filename}
+            const match = url.match(/wix:image:\/\/v1\/([^\/]+)\//);
+            if (match && match[1]) {
+                const imageId = match[1];
+                return `https://static.wixstatic.com/media/${imageId}`;
+            }
+        }
+        
+        return url;
+    }
+    
+    _getAllCurrencies() {
+        const currencies = [
+            { code: 'USD', symbol: '$', name: 'US Dollar' },
+            { code: 'EUR', symbol: '€', name: 'Euro' },
+            { code: 'GBP', symbol: '£', name: 'British Pound' },
+            { code: 'JPY', symbol: '¥', name: 'Japanese Yen' },
+            { code: 'AUD', symbol: 'A$', name: 'Australian Dollar' },
+            { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
+            { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
+            { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
+            { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
+            { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar' },
+            { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso' },
+            { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+            { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar' },
+            { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone' },
+            { code: 'KRW', symbol: '₩', name: 'South Korean Won' },
+            { code: 'TRY', symbol: '₺', name: 'Turkish Lira' },
+            { code: 'RUB', symbol: '₽', name: 'Russian Ruble' },
+            { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+            { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+            { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
+            { code: 'DKK', symbol: 'kr', name: 'Danish Krone' },
+            { code: 'PLN', symbol: 'zł', name: 'Polish Zloty' },
+            { code: 'TWD', symbol: 'NT$', name: 'Taiwan Dollar' },
+            { code: 'THB', symbol: '฿', name: 'Thai Baht' },
+            { code: 'MYR', symbol: 'RM', name: 'Malaysian Ringgit' },
+            { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah' },
+            { code: 'HUF', symbol: 'Ft', name: 'Hungarian Forint' },
+            { code: 'CZK', symbol: 'Kč', name: 'Czech Koruna' },
+            { code: 'ILS', symbol: '₪', name: 'Israeli Shekel' },
+            { code: 'CLP', symbol: 'CL$', name: 'Chilean Peso' },
+            { code: 'PHP', symbol: '₱', name: 'Philippine Peso' },
+            { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+            { code: 'COP', symbol: 'COL$', name: 'Colombian Peso' },
+            { code: 'SAR', symbol: 'SR', name: 'Saudi Riyal' },
+            { code: 'RON', symbol: 'lei', name: 'Romanian Leu' },
+            { code: 'VND', symbol: '₫', name: 'Vietnamese Dong' },
+            { code: 'ARS', symbol: 'AR$', name: 'Argentine Peso' },
+            { code: 'UAH', symbol: '₴', name: 'Ukrainian Hryvnia' },
+            { code: 'QAR', symbol: 'QR', name: 'Qatari Riyal' },
+            { code: 'KWD', symbol: 'KD', name: 'Kuwaiti Dinar' },
+            { code: 'OMR', symbol: 'OMR', name: 'Omani Rial' },
+            { code: 'BHD', symbol: 'BD', name: 'Bahraini Dinar' },
+            { code: 'JOD', symbol: 'JD', name: 'Jordanian Dinar' },
+            { code: 'EGP', symbol: 'E£', name: 'Egyptian Pound' },
+            { code: 'MAD', symbol: 'MAD', name: 'Moroccan Dirham' },
+            { code: 'PKR', symbol: 'Rs', name: 'Pakistani Rupee' },
+            { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka' },
+            { code: 'LKR', symbol: 'Rs', name: 'Sri Lankan Rupee' },
+            { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling' },
+            { code: 'NGN', symbol: '₦', name: 'Nigerian Naira' },
+            { code: 'GHS', symbol: 'GH₵', name: 'Ghanaian Cedi' },
+            { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling' },
+            { code: 'TZS', symbol: 'TSh', name: 'Tanzanian Shilling' },
+            { code: 'ETB', symbol: 'Br', name: 'Ethiopian Birr' },
+            { code: 'PEN', symbol: 'S/', name: 'Peruvian Sol' },
+            { code: 'VEF', symbol: 'Bs', name: 'Venezuelan Bolívar' },
+            { code: 'BOB', symbol: 'Bs', name: 'Bolivian Boliviano' },
+            { code: 'PYG', symbol: '₲', name: 'Paraguayan Guaraní' },
+            { code: 'UYU', symbol: '$U', name: 'Uruguayan Peso' },
+            { code: 'CRC', symbol: '₡', name: 'Costa Rican Colón' },
+            { code: 'GTQ', symbol: 'Q', name: 'Guatemalan Quetzal' },
+            { code: 'HNL', symbol: 'L', name: 'Honduran Lempira' },
+            { code: 'NIO', symbol: 'C$', name: 'Nicaraguan Córdoba' },
+            { code: 'PAB', symbol: 'B/.', name: 'Panamanian Balboa' },
+            { code: 'DOP', symbol: 'RD$', name: 'Dominican Peso' },
+            { code: 'JMD', symbol: 'J$', name: 'Jamaican Dollar' },
+            { code: 'TTD', symbol: 'TT$', name: 'Trinidad and Tobago Dollar' },
+            { code: 'BBD', symbol: 'Bds$', name: 'Barbadian Dollar' },
+            { code: 'BSD', symbol: 'B$', name: 'Bahamian Dollar' },
+            { code: 'BZD', symbol: 'BZ$', name: 'Belize Dollar' },
+            { code: 'XCD', symbol: 'EC$', name: 'East Caribbean Dollar' },
+            { code: 'ISK', symbol: 'kr', name: 'Icelandic Króna' },
+            { code: 'BGN', symbol: 'лв', name: 'Bulgarian Lev' },
+            { code: 'HRK', symbol: 'kn', name: 'Croatian Kuna' },
+            { code: 'RSD', symbol: 'din', name: 'Serbian Dinar' },
+            { code: 'MKD', symbol: 'ден', name: 'Macedonian Denar' },
+            { code: 'BAM', symbol: 'KM', name: 'Bosnia-Herzegovina Convertible Mark' },
+            { code: 'ALL', symbol: 'L', name: 'Albanian Lek' },
+            { code: 'MDL', symbol: 'L', name: 'Moldovan Leu' },
+            { code: 'GEL', symbol: '₾', name: 'Georgian Lari' },
+            { code: 'AMD', symbol: '֏', name: 'Armenian Dram' },
+            { code: 'AZN', symbol: '₼', name: 'Azerbaijani Manat' },
+            { code: 'KZT', symbol: '₸', name: 'Kazakhstani Tenge' },
+            { code: 'UZS', symbol: 'soʻm', name: 'Uzbekistani Som' },
+            { code: 'KGS', symbol: 'с', name: 'Kyrgyzstani Som' },
+            { code: 'TJS', symbol: 'ЅМ', name: 'Tajikistani Somoni' },
+            { code: 'TMT', symbol: 'm', name: 'Turkmenistan Manat' },
+            { code: 'AFN', symbol: '؋', name: 'Afghan Afghani' },
+            { code: 'IQD', symbol: 'ID', name: 'Iraqi Dinar' },
+            { code: 'LBP', symbol: 'LL', name: 'Lebanese Pound' },
+            { code: 'SYP', symbol: 'LS', name: 'Syrian Pound' },
+            { code: 'YER', symbol: 'YR', name: 'Yemeni Rial' },
+            { code: 'MNT', symbol: '₮', name: 'Mongolian Tögrög' },
+            { code: 'MMK', symbol: 'K', name: 'Myanmar Kyat' },
+            { code: 'KHR', symbol: '៛', name: 'Cambodian Riel' },
+            { code: 'LAK', symbol: '₭', name: 'Lao Kip' },
+            { code: 'NPR', symbol: 'Rs', name: 'Nepalese Rupee' },
+            { code: 'BTN', symbol: 'Nu', name: 'Bhutanese Ngultrum' },
+            { code: 'MVR', symbol: 'Rf', name: 'Maldivian Rufiyaa' },
+            { code: 'BND', symbol: 'B$', name: 'Brunei Dollar' },
+            { code: 'FJD', symbol: 'FJ$', name: 'Fijian Dollar' },
+            { code: 'PGK', symbol: 'K', name: 'Papua New Guinean Kina' },
+            { code: 'WST', symbol: 'WS$', name: 'Samoan Tālā' },
+            { code: 'TOP', symbol: 'T$', name: 'Tongan Paʻanga' },
+            { code: 'VUV', symbol: 'VT', name: 'Vanuatu Vatu' },
+            { code: 'SBD', symbol: 'SI$', name: 'Solomon Islands Dollar' },
+            { code: 'SCR', symbol: 'SR', name: 'Seychellois Rupee' },
+            { code: 'MUR', symbol: 'Rs', name: 'Mauritian Rupee' },
+            { code: 'MWK', symbol: 'MK', name: 'Malawian Kwacha' },
+            { code: 'ZMW', symbol: 'ZK', name: 'Zambian Kwacha' },
+            { code: 'BWP', symbol: 'P', name: 'Botswana Pula' },
+            { code: 'NAD', symbol: 'N$', name: 'Namibian Dollar' },
+            { code: 'SZL', symbol: 'L', name: 'Swazi Lilangeni' },
+            { code: 'LSL', symbol: 'L', name: 'Lesotho Loti' },
+            { code: 'AOA', symbol: 'Kz', name: 'Angolan Kwanza' },
+            { code: 'MZN', symbol: 'MT', name: 'Mozambican Metical' },
+            { code: 'MGA', symbol: 'Ar', name: 'Malagasy Ariary' },
+            { code: 'TND', symbol: 'DT', name: 'Tunisian Dinar' },
+            { code: 'DZD', symbol: 'DA', name: 'Algerian Dinar' },
+            { code: 'LYD', symbol: 'LD', name: 'Libyan Dinar' },
+            { code: 'SDG', symbol: 'SDG', name: 'Sudanese Pound' },
+            { code: 'RWF', symbol: 'FRw', name: 'Rwandan Franc' },
+            { code: 'BIF', symbol: 'FBu', name: 'Burundian Franc' },
+            { code: 'DJF', symbol: 'Fdj', name: 'Djiboutian Franc' },
+            { code: 'SOS', symbol: 'Sh', name: 'Somali Shilling' },
+            { code: 'GMD', symbol: 'D', name: 'Gambian Dalasi' },
+            { code: 'SLL', symbol: 'Le', name: 'Sierra Leonean Leone' },
+            { code: 'LRD', symbol: 'L$', name: 'Liberian Dollar' },
+            { code: 'GNF', symbol: 'FG', name: 'Guinean Franc' },
+            { code: 'CVE', symbol: '$', name: 'Cape Verdean Escudo' },
+            { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc' },
+            { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc' },
+            { code: 'KMF', symbol: 'CF', name: 'Comorian Franc' },
+            { code: 'CDF', symbol: 'FC', name: 'Congolese Franc' },
+            { code: 'STN', symbol: 'Db', name: 'São Tomé and Príncipe Dobra' },
+            { code: 'ERN', symbol: 'Nfk', name: 'Eritrean Nakfa' },
+            { code: 'SHP', symbol: '£', name: 'Saint Helena Pound' },
+            { code: 'GIP', symbol: '£', name: 'Gibraltar Pound' },
+            { code: 'FKP', symbol: '£', name: 'Falkland Islands Pound' },
+            { code: 'KYD', symbol: 'CI$', name: 'Cayman Islands Dollar' },
+            { code: 'BMD', symbol: 'BD$', name: 'Bermudian Dollar' },
+            { code: 'AWG', symbol: 'ƒ', name: 'Aruban Florin' },
+            { code: 'ANG', symbol: 'ƒ', name: 'Netherlands Antillean Guilder' },
+            { code: 'SRD', symbol: '$', name: 'Surinamese Dollar' },
+            { code: 'GYD', symbol: 'G$', name: 'Guyanese Dollar' },
+            { code: 'HTG', symbol: 'G', name: 'Haitian Gourde' },
+            { code: 'CUP', symbol: '$', name: 'Cuban Peso' },
+            { code: 'CUC', symbol: 'CUC$', name: 'Cuban Convertible Peso' },
+            { code: 'IRR', symbol: '﷼', name: 'Iranian Rial' }
+        ];
+        
+        const selectedCurrency = this._formData.currency || 'USD';
+        
+        // Save CODE in value, but show CODE (SYMBOL) - Name in dropdown
+        return currencies.map(c => 
+            `<option value="${c.code}" ${selectedCurrency === c.code ? 'selected' : ''}>${c.code} (${c.symbol}) - ${c.name}</option>`
+        ).join('');
+    }
+    
+    async _loadRelatedListingsOptions() {
+        console.log('🏠 Dashboard: Loading related listings options');
+        
+        try {
+            // Dispatch event to get all listings for selection
+            this._dispatchEvent('load-all-listings-for-selection', {
+                excludeId: this._selectedListing?._id || null
+            });
+        } catch (error) {
+            console.error('🏠 Dashboard: Error loading related listings:', error);
         }
     }
     
-    showNotification(type, message) {
-        const notification = this.querySelector('#notification');
-        notification.className = `notification ${type} show`;
-        notification.textContent = message;
+    setAllListingsForSelection(listings) {
+        console.log('🏠 Dashboard: Setting all listings for selection:', listings.length);
         
-        setTimeout(() => {
-            notification.classList.remove('show');
-        }, 5000);
+        const container = this._shadow.getElementById('relatedListingsContainer');
+        if (!container) return;
+        
+        container.innerHTML = '';
+        
+        if (listings.length === 0) {
+            container.innerHTML = '<div style="text-align: center; color: #6b7280; padding: 40px 20px;">No other listings available</div>';
+            return;
+        }
+        
+        // Get currently selected related IDs
+        const selectedIds = this._formData.relatedProperties || [];
+        
+        listings.forEach(listing => {
+            const isSelected = selectedIds.includes(listing._id);
+            
+            // Convert Wix image URL to WixStatic URL
+            const imageUrl = this._convertWixImageUrl(listing.thumbnailImage);
+            
+            const item = document.createElement('label');
+            item.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: white; transition: all 0.2s;';
+            
+            item.innerHTML = `
+                <input type="checkbox" class="checkbox related-checkbox" data-id="${listing._id}" ${isSelected ? 'checked' : ''} style="flex-shrink: 0;">
+                <img src="${imageUrl}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${listing.title}</div>
+                    <div style="font-size: 12px; color: #6b7280;">${listing.location || 'No location'}</div>
+                    <div style="font-size: 13px; font-weight: 700; color: #8b5cf6; margin-top: 4px;">${listing.currency || '$'}${this._formatNumber(listing.price || 0)}</div>
+                </div>
+            `;
+            
+            item.addEventListener('mouseenter', () => {
+                item.style.borderColor = '#8b5cf6';
+                item.style.background = '#f5f3ff';
+            });
+            
+            item.addEventListener('mouseleave', () => {
+                item.style.borderColor = '#e5e7eb';
+                item.style.background = 'white';
+            });
+            
+            const checkbox = item.querySelector('.related-checkbox');
+            checkbox.addEventListener('change', () => {
+                this._updateRelatedProperties();
+            });
+            
+            container.appendChild(item);
+        });
+    }
+    
+    _updateRelatedProperties() {
+        const checkboxes = this._shadow.querySelectorAll('.related-checkbox');
+        const selectedIds = Array.from(checkboxes)
+            .filter(cb => cb.checked)
+            .map(cb => cb.dataset.id);
+        
+        this._formData.relatedProperties = selectedIds;
+        console.log('🏠 Dashboard: Updated related properties:', selectedIds);
     }
 }
 
 customElements.define('real-estate-dashboard', RealEstateDashboard);
+console.log('🏠 Dashboard: ✅ Custom element registered');
