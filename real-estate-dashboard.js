@@ -1457,8 +1457,8 @@ class RealEstateDashboard extends HTMLElement {
             .replace(/[^a-z0-9\s-]/g, '')
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
-            .replace(/^-+|-+$/g, '')  // Remove leading and trailing hyphens
-            .substring(0, 100);
+            .substring(0, 100)
+            .replace(/^-+|-+$/g, '');  // Remove leading and trailing hyphens AFTER substring
     }
     
     _collectFormData() {
@@ -1893,10 +1893,11 @@ class RealEstateDashboard extends HTMLElement {
             { code: 'IRR', symbol: '﷼', name: 'Iranian Rial' }
         ];
         
-        const selectedCurrency = this._formData.currency || '$';
+        const selectedCurrency = this._formData.currency || 'USD';
         
+        // Save CODE in value, but show CODE (SYMBOL) - Name in dropdown
         return currencies.map(c => 
-            `<option value="${c.symbol}" ${selectedCurrency === c.symbol ? 'selected' : ''}>${c.code} (${c.symbol}) - ${c.name}</option>`
+            `<option value="${c.code}" ${selectedCurrency === c.code ? 'selected' : ''}>${c.code} (${c.symbol}) - ${c.name}</option>`
         ).join('');
     }
     
