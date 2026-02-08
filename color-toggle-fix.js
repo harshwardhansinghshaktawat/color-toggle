@@ -22,25 +22,25 @@
                 ],
                 currentTheme: 'light'
             };
-            this.originalColors = new WeakMap();
+            this.originalColors = new Map(); // Changed to Map with element reference as key
             this.defaultTheme = 'light';
             this.observer = null;
             this.isInitialized = false;
             this.themeChangeInProgress = false;
             this.pendingElements = new Set();
-            this.processedElements = new WeakSet();
+            this.processedElements = new Set(); // Changed to regular Set to track by element
             this.reapplyTimer = null;
             this.pageChangeDetected = false;
+            this.lastUrl = '';
+            this.navigationInProgress = false;
         }
 
         connectedCallback() {
-            // Delay initialization to ensure DOM is ready
             if (document.readyState === 'loading') {
                 document.addEventListener('DOMContentLoaded', () => {
                     this.initialize();
                 });
             } else {
-                // Use longer timeout to ensure Wix environment is fully ready
                 setTimeout(() => {
                     this.initialize();
                 }, 500);
@@ -52,18 +52,16 @@
             this.isInitialized = true;
             
             this.render();
+            this.lastUrl = window.location.href;
             
-            // Wait for Wix to fully load before initializing theme
             this.waitForWixReady().then(() => {
                 this.initializeTheme();
                 this.setupMutationObserver();
-                this.setupWixAppObserver();
-                this.setupPageChangeDetection();
+                this.setupWixNavigationListener();
             });
         }
 
         async waitForWixReady() {
-            // Wait for common Wix elements to be present
             return new Promise((resolve) => {
                 const checkWixReady = () => {
                     const wixElements = document.querySelector('[id^="SITE"]') || 
@@ -71,7 +69,6 @@
                                       document.querySelector('[class*="wix"]');
                     
                     if (wixElements && document.readyState === 'complete') {
-                        // Additional delay to ensure all scripts have executed
                         setTimeout(resolve, 1000);
                     } else {
                         setTimeout(checkWixReady, 100);
@@ -81,98 +78,106 @@
             });
         }
 
-        setupPageChangeDetection() {
-            // Monitor for Wix page transitions
-            let lastUrl = location.href;
+        setupWixNavigationListener() {
+            console.log('🔍 Setting up Wix navigation detection...');
             
-            // Watch for URL changes (Wix SPA navigation)
-            const urlObserver = new MutationObserver(() => {
-                if (location.href !== lastUrl) {
-                    lastUrl = location.href;
-                    console.log('🔄 Page navigation detected!');
-                    this.handlePageChange();
+            // Method 1: URL change detection
+            const urlCheckInterval = setInterval(() => {
+                const currentUrl = window.location.href;
+                if (currentUrl !== this.lastUrl && !this.navigationInProgress) {
+                    console.log('🔄 URL changed from', this.lastUrl, 'to', currentUrl);
+                    this.lastUrl = currentUrl;
+                    this.handleWixNavigation();
+                }
+            }, 100);
+
+            // Method 2: History API monitoring
+            const originalPushState = history.pushState;
+            const originalReplaceState = history.replaceState;
+            
+            history.pushState = (...args) => {
+                originalPushState.apply(history, args);
+                if (!this.navigationInProgress) {
+                    console.log('🔄 pushState detected');
+                    this.handleWixNavigation();
+                }
+            };
+            
+            history.replaceState = (...args) => {
+                originalReplaceState.apply(history, args);
+                if (!this.navigationInProgress) {
+                    console.log('🔄 replaceState detected');
+                    this.handleWixNavigation();
+                }
+            };
+
+            // Method 3: Popstate event
+            window.addEventListener('popstate', () => {
+                if (!this.navigationInProgress) {
+                    console.log('🔄 popstate event');
+                    this.handleWixNavigation();
                 }
             });
-            
-            urlObserver.observe(document.querySelector('body'), {
-                childList: true,
-                subtree: true
-            });
 
-            // Also listen for popstate events
-            window.addEventListener('popstate', () => {
-                console.log('🔄 Browser navigation detected!');
-                this.handlePageChange();
-            });
-
-            // Monitor for Wix-specific page container changes
-            const pageObserver = new MutationObserver((mutations) => {
-                mutations.forEach(mutation => {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            // Check if this is a Wix page container
-                            if (node.id && (node.id.startsWith('PAGES_CONTAINER') || 
-                                          node.id.includes('SITE_') ||
-                                          node.hasAttribute('data-mesh-id'))) {
-                                console.log('🔄 Wix page container changed!');
-                                this.handlePageChange();
-                            }
-                        }
-                    });
-                });
-            });
-
-            pageObserver.observe(document.body, {
-                childList: true,
-                subtree: false
-            });
+            // Store interval ID for cleanup
+            this.urlCheckInterval = urlCheckInterval;
         }
 
-        handlePageChange() {
-            if (this.pageChangeDetected) return;
-            this.pageChangeDetected = true;
-
-            console.log('⏳ Waiting for new page to fully load...');
+        handleWixNavigation() {
+            if (this.navigationInProgress) return;
+            
+            this.navigationInProgress = true;
+            console.log('⏳ Wix navigation detected - waiting for page to fully render...');
 
             // Clear any existing timers
-            clearTimeout(this.reapplyTimer);
+            clearTimeout(this.navigationTimer);
 
-            // Wait for Wix to finish rendering the new page
-            this.reapplyTimer = setTimeout(() => {
-                console.log('🎨 Reapplying theme after page change...');
+            // Wait for Wix to fully render the new page
+            this.navigationTimer = setTimeout(() => {
+                this.onPageFullyLoaded();
+            }, 2000); // Increased wait time for full Wix page render
+        }
+
+        onPageFullyLoaded() {
+            console.log('✅ Page fully loaded - reapplying theme...');
+            
+            const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+            
+            if (!isDefaultTheme) {
+                // CRITICAL: Clear the original colors map and processed elements
+                // This ensures we capture the NEW page's original colors
+                this.originalColors.clear();
+                this.processedElements.clear();
                 
-                const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+                console.log('💾 Capturing fresh original colors for new page...');
+                this.storeOriginalColors();
                 
-                if (!isDefaultTheme) {
-                    // Reset processed elements so they get reprocessed
-                    this.processedElements = new WeakSet();
-                    
-                    // Store colors for new elements
-                    this.storeOriginalColors();
-                    
-                    // Reapply theme
-                    const isDark = this.settings.currentTheme === 'dark';
-                    this.changeAllColors(isDark);
-                    this.processAllShadowRoots(isDark);
-                    this.processWixWidgets(document.body, isDark);
-                    
-                    // Additional passes to catch late-loading elements
-                    setTimeout(() => {
-                        this.finalPassForMissedElements(isDark);
-                    }, 500);
-                    
-                    setTimeout(() => {
-                        this.finalPassForMissedElements(isDark);
-                    }, 1000);
-                    
-                    setTimeout(() => {
-                        this.finalPassForMissedElements(isDark);
-                        this.pageChangeDetected = false;
-                    }, 2000);
-                } else {
-                    this.pageChangeDetected = false;
-                }
-            }, 1000); // Wait 1 second for page to settle
+                const isDark = this.settings.currentTheme === 'dark';
+                
+                // Apply theme immediately
+                this.applyThemeToPage(isDark);
+                
+                // Additional passes to catch late-loading elements
+                setTimeout(() => this.applyThemeToPage(isDark), 500);
+                setTimeout(() => this.applyThemeToPage(isDark), 1000);
+                setTimeout(() => this.applyThemeToPage(isDark), 1500);
+                setTimeout(() => {
+                    this.applyThemeToPage(isDark);
+                    this.navigationInProgress = false;
+                    console.log('🎉 Theme reapplication complete!');
+                }, 2500);
+            } else {
+                this.navigationInProgress = false;
+            }
+        }
+
+        applyThemeToPage(isDark) {
+            console.log(`🎨 Applying ${isDark ? 'DARK' : 'LIGHT'} theme to page...`);
+            
+            this.changeAllColors(isDark);
+            this.processAllShadowRoots(isDark);
+            this.processWixWidgets(document.body, isDark);
+            this.finalPassForMissedElements(isDark);
         }
 
         static get observedAttributes() {
@@ -313,15 +318,25 @@
             if (toggle) {
                 toggle.addEventListener('change', (e) => {
                     const isChecked = e.target.checked;
-                    this.settings.currentTheme = isChecked ? 'dark' : 'light';
+                    const newTheme = isChecked ? 'dark' : 'light';
+                    
+                    console.log('🎚️ Toggle clicked! Switching from', this.settings.currentTheme, 'to', newTheme);
+                    
+                    this.settings.currentTheme = newTheme;
                     
                     try {
-                        localStorage.setItem('themePreference', this.settings.currentTheme);
+                        localStorage.setItem('themePreference', newTheme);
                     } catch (e) {
                         console.warn('⚠️ Could not save to localStorage:', e);
                     }
                     
-                    console.log('🎚️ Toggle clicked! New theme:', this.settings.currentTheme);
+                    // CRITICAL: When switching themes, we need fresh original colors
+                    // Clear everything and recapture
+                    this.originalColors.clear();
+                    this.processedElements.clear();
+                    
+                    console.log('💾 Recapturing original colors before theme change...');
+                    this.storeOriginalColors();
                     
                     this.changeTheme();
                 });
@@ -330,7 +345,7 @@
 
         setupMutationObserver() {
             this.observer = new MutationObserver((mutations) => {
-                if (this.themeChangeInProgress || this.pageChangeDetected) return;
+                if (this.themeChangeInProgress || this.navigationInProgress) return;
                 
                 const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
                 if (isDefaultTheme) return;
@@ -340,26 +355,23 @@
                 mutations.forEach(mutation => {
                     if (mutation.type === 'childList') {
                         mutation.addedNodes.forEach(node => {
-                            if (node.nodeType === Node.ELEMENT_NODE) {
-                                // Add to pending elements set
+                            if (node.nodeType === Node.ELEMENT_NODE && !node.closest('theme-switcher')) {
                                 this.pendingElements.add(node);
                             }
                         });
-                    } else if (mutation.type === 'attributes' && 
-                             (mutation.attributeName === 'style' || mutation.attributeName === 'class')) {
-                        // Re-process element if its style was changed
+                    } else if (mutation.type === 'attributes') {
                         const target = mutation.target;
                         if (target.nodeType === Node.ELEMENT_NODE && !target.closest('theme-switcher')) {
+                            // Element's style was changed - might need reprocessing
                             this.pendingElements.add(target);
                         }
                     }
                 });
                 
-                // Process pending elements after a short delay
                 clearTimeout(this.pendingTimeout);
                 this.pendingTimeout = setTimeout(() => {
                     this.processPendingElements(isDark);
-                }, 100);
+                }, 150);
             });
 
             this.observer.observe(document.body, {
@@ -380,7 +392,6 @@
                         this.processShadowRoot(node.shadowRoot, isDark);
                     }
                     
-                    // Process descendants
                     const descendants = node.querySelectorAll('*');
                     descendants.forEach(el => {
                         if (!this.processedElements.has(el)) {
@@ -394,58 +405,6 @@
             });
             
             this.pendingElements.clear();
-        }
-
-        setupWixAppObserver() {
-            // Special observer for Wix app elements that load late
-            const wixAppObserver = new MutationObserver((mutations) => {
-                if (this.themeChangeInProgress || this.pageChangeDetected) return;
-                
-                const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
-                if (isDefaultTheme) return;
-                
-                const isDark = this.settings.currentTheme === 'dark';
-                
-                mutations.forEach(mutation => {
-                    mutation.addedNodes.forEach(node => {
-                        if (node.nodeType === Node.ELEMENT_NODE) {
-                            // Check if it's a Wix app element
-                            if (this.isWixAppElement(node)) {
-                                console.log('🎯 Detected Wix app element:', node);
-                                setTimeout(() => {
-                                    this.deepProcessWidget(node, isDark);
-                                }, 500);
-                            }
-                        }
-                    });
-                });
-            });
-
-            wixAppObserver.observe(document.body, {
-                childList: true,
-                subtree: true
-            });
-        }
-
-        isWixAppElement(element) {
-            const wixAppSelectors = [
-                '[data-hook*="product"]',
-                '[data-hook*="breadcrumb"]',
-                '[data-hook*="cart"]',
-                '[class*="product"]',
-                '[class*="breadcrumb"]',
-                '[id*="STORES"]',
-                '[id*="PRODUCT"]',
-                '[data-testid]'
-            ];
-            
-            return wixAppSelectors.some(selector => {
-                try {
-                    return element.matches(selector) || element.querySelector(selector);
-                } catch (e) {
-                    return false;
-                }
-            });
         }
 
         initializeTheme() {
@@ -477,10 +436,9 @@
             const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
             if (!isDefaultTheme) {
                 console.log('⚡ Applying non-default theme on load');
-                // Delay theme application to ensure all elements are loaded
                 setTimeout(() => {
                     this.changeTheme();
-                }, 500);
+                }, 800);
             } else {
                 console.log('✅ Default theme active - no changes needed');
             }
@@ -488,29 +446,35 @@
 
         storeOriginalColors() {
             const allElements = document.querySelectorAll('*');
+            let storedCount = 0;
             
             allElements.forEach(element => {
-                this.storeOriginalColorsForElement(element);
+                if (this.storeOriginalColorsForElement(element)) {
+                    storedCount++;
+                }
                 
                 if (element.shadowRoot) {
                     const shadowElements = element.shadowRoot.querySelectorAll('*');
                     shadowElements.forEach(shadowEl => {
-                        this.storeOriginalColorsForElement(shadowEl);
+                        if (this.storeOriginalColorsForElement(shadowEl)) {
+                            storedCount++;
+                        }
                     });
                 }
             });
 
-            console.log('✅ Stored original colors for', allElements.length, 'elements');
+            console.log('✅ Stored original colors for', storedCount, 'new elements');
         }
 
         storeOriginalColorsForElement(element) {
-            if (element.closest('theme-switcher')) return;
-            if (this.originalColors.has(element)) return;
+            if (element.closest('theme-switcher')) return false;
+            
+            // Only store if we haven't stored for this element yet
+            if (this.originalColors.has(element)) return false;
 
             try {
                 const computedStyle = window.getComputedStyle(element);
                 
-                // Store ALL original color values to prevent overwriting
                 this.originalColors.set(element, {
                     backgroundColor: computedStyle.backgroundColor,
                     color: computedStyle.color,
@@ -521,13 +485,12 @@
                     fill: computedStyle.fill,
                     stroke: computedStyle.stroke,
                     backgroundImage: computedStyle.backgroundImage,
-                    webkitTextFillColor: computedStyle.webkitTextFillColor || computedStyle.getPropertyValue('-webkit-text-fill-color'),
-                    // Store element's inline styles to preserve them
-                    inlineBackgroundColor: element.style.backgroundColor,
-                    inlineColor: element.style.color
+                    webkitTextFillColor: computedStyle.webkitTextFillColor || computedStyle.getPropertyValue('-webkit-text-fill-color')
                 });
+                
+                return true;
             } catch (e) {
-                // Element not accessible, skip
+                return false;
             }
         }
 
@@ -671,21 +634,18 @@
                 
                 this.restoreOriginalColors();
                 this.restoreAllShadowRoots();
+                this.themeChangeInProgress = false;
             } else {
                 document.body.style.backgroundColor = colors[0];
                 document.body.style.color = colors[4];
-                document.body.style.transition = 'all 0.3s ease';
                 
-                // Process in stages to prevent flashing
                 requestAnimationFrame(() => {
                     this.changeAllColors(isDark);
                     
                     requestAnimationFrame(() => {
                         this.processAllShadowRoots(isDark);
-                        this.processAllIframes(isDark);
                         this.processWixWidgets(document.body, isDark);
                         
-                        // Multiple passes for any missed elements
                         setTimeout(() => {
                             this.finalPassForMissedElements(isDark);
                         }, 300);
@@ -706,25 +666,23 @@
         finalPassForMissedElements(isDark) {
             console.log('🔍 Final pass for missed elements...');
             
-            // Target specific Wix app elements that often get missed
             const missedSelectors = [
-                '[data-hook*="breadcrumb"]',
-                '[data-hook*="product-title"]',
-                '[data-hook*="product-description"]',
-                '[data-hook*="price"]',
+                '[data-hook]',
                 '[class*="breadcrumb"]',
-                '[class*="product-title"]',
-                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a', 'div', 'section'
+                '[class*="product"]',
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+                'p', 'span', 'a', 'div', 'section', 'li', 'td', 'th'
             ];
             
             missedSelectors.forEach(selector => {
                 try {
                     const elements = document.querySelectorAll(selector);
                     elements.forEach(el => {
-                        // Always reprocess to ensure colors stick
-                        this.storeOriginalColorsForElement(el);
-                        this.processElement(el, isDark);
-                        this.processedElements.add(el);
+                        if (!el.closest('theme-switcher')) {
+                            this.storeOriginalColorsForElement(el);
+                            this.processElement(el, isDark);
+                            this.processedElements.add(el);
+                        }
                     });
                 } catch (e) {
                     // Invalid selector, skip
@@ -733,9 +691,8 @@
         }
 
         restoreOriginalColors() {
-            console.log('🔄 Restoring original colors (removing inline styles)...');
+            console.log('🔄 Restoring original colors...');
             
-            this.themeChangeInProgress = false;
             const allElements = document.querySelectorAll('*');
             let restoredCount = 0;
 
@@ -763,13 +720,12 @@
                 }
             });
 
-            this.processedElements = new WeakSet();
-            console.log(`✅ Restored ${restoredCount} elements by removing inline styles`);
+            this.originalColors.clear();
+            this.processedElements.clear();
+            console.log(`✅ Restored ${restoredCount} elements`);
         }
 
         restoreAllShadowRoots() {
-            console.log('👻 Restoring shadow DOMs...');
-            
             const allElements = document.querySelectorAll('*');
             
             allElements.forEach(element => {
@@ -788,8 +744,6 @@
                                 shadowEl.style.stroke = '';
                                 shadowEl.style.backgroundImage = '';
                                 shadowEl.style.webkitTextFillColor = '';
-                                shadowEl.style.webkitBackgroundClip = '';
-                                shadowEl.style.backgroundClip = '';
                             } catch (e) {
                                 // Element not accessible, skip
                             }
@@ -800,27 +754,24 @@
         }
 
         changeAllColors(toDark) {
-            console.log('🔄 Converting to alternate theme...');
+            console.log('🔄 Converting colors...');
             
             const allElements = document.querySelectorAll('*');
             let changedCount = 0;
 
             allElements.forEach(element => {
-                changedCount += this.processElement(element, toDark);
-                this.processedElements.add(element);
+                if (!element.closest('theme-switcher')) {
+                    changedCount += this.processElement(element, toDark);
+                    this.processedElements.add(element);
+                }
             });
 
             console.log(`✅ Converted ${changedCount} elements`);
         }
 
         processElement(element, toDark) {
-            if (element.closest('theme-switcher')) return 0;
-
             const original = this.originalColors.get(element);
-            if (!original) {
-                this.storeOriginalColorsForElement(element);
-                return 0;
-            }
+            if (!original) return 0;
 
             let changed = 0;
 
@@ -828,14 +779,12 @@
                 const newBg = this.convertColor(original.backgroundColor, toDark);
                 if (newBg) {
                     element.style.setProperty('background-color', newBg, 'important');
-                    element.style.transition = 'background-color 0.3s ease';
                     changed++;
                 }
 
                 const newColor = this.convertColor(original.color, toDark);
                 if (newColor) {
                     element.style.setProperty('color', newColor, 'important');
-                    element.style.transition = 'color 0.3s ease';
                 }
 
                 const newBorderTop = this.convertColor(original.borderTopColor, toDark);
@@ -884,8 +833,6 @@
         }
 
         processAllShadowRoots(toDark) {
-            console.log('👻 Processing shadow DOMs...');
-            
             const allElements = document.querySelectorAll('*');
             let shadowCount = 0;
             
@@ -896,7 +843,9 @@
                 }
             });
 
-            console.log(`✅ Processed ${shadowCount} shadow DOMs`);
+            if (shadowCount > 0) {
+                console.log(`✅ Processed ${shadowCount} shadow DOMs`);
+            }
         }
 
         processShadowRoot(shadowRoot, toDark) {
@@ -915,50 +864,12 @@
             });
         }
 
-        processAllIframes(toDark) {
-            console.log('🖼️ Processing iframes...');
-            
-            const iframes = document.querySelectorAll('iframe');
-            let processedCount = 0;
-
-            iframes.forEach(iframe => {
-                try {
-                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    
-                    if (iframeDoc) {
-                        const iframeElements = iframeDoc.querySelectorAll('*');
-                        iframeElements.forEach(element => {
-                            this.storeOriginalColorsForElement(element);
-                            this.processElement(element, toDark);
-                            this.processedElements.add(element);
-                        });
-                        processedCount++;
-                    }
-                } catch (e) {
-                    // Cross-origin iframe, cannot access
-                }
-            });
-
-            console.log(`✅ Processed ${processedCount} accessible iframes`);
-        }
-
         processWixWidgets(container, toDark) {
-            console.log('🎯 Processing Wix widgets...');
-            
             const wixSelectors = [
-                // Chat widgets
-                '[data-hook*="chat"]', '[class*="chat"]', '#SITE_CHAT',
-                '[id*="chat"]', '[aria-label*="chat" i]',
-                // Dropdowns and selects
-                '[role="listbox"]', '[role="combobox"]', '[class*="dropdown"]',
-                '[class*="select"]', '[class*="currency"]', 'select',
-                // Cart widgets
-                '[data-hook*="cart"]', '[class*="cart"]', '#SITE_CART',
-                '[id*="cart"]', '[aria-label*="cart" i]',
-                // Product pages
-                '[data-hook*="product"]', '[class*="product"]',
-                '[data-hook*="breadcrumb"]', '[class*="breadcrumb"]',
-                // Wix Stores elements
+                '[data-hook]',
+                '[class*="chat"]', '[class*="cart"]',
+                '[class*="dropdown"]', '[class*="select"]',
+                '[class*="breadcrumb"]', '[class*="product"]',
                 '[id*="STORES"]', '[id*="PRODUCT"]',
                 '[data-testid]'
             ];
@@ -996,25 +907,25 @@
             if (this.observer) {
                 this.observer.disconnect();
             }
+            if (this.urlCheckInterval) {
+                clearInterval(this.urlCheckInterval);
+            }
             clearTimeout(this.pendingTimeout);
-            clearTimeout(this.reapplyTimer);
+            clearTimeout(this.navigationTimer);
         }
     }
 
-    // Register the custom element
     try {
         customElements.define('theme-switcher', ThemeSwitcherElement);
-        console.log('✅ theme-switcher custom element registered successfully');
+        console.log('✅ theme-switcher registered successfully');
     } catch (error) {
         console.error('❌ Failed to register theme-switcher:', error);
     }
 
-    // Export for module compatibility (optional, won't break non-module usage)
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = { ThemeSwitcherElement };
     }
     
-    // Also make available globally
     window.ThemeSwitcherElement = ThemeSwitcherElement;
 
 })();
