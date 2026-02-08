@@ -1,7 +1,62 @@
-(function () {
+(function() {
     'use strict';
+    
+    // ==========================================
+    // CRITICAL FIX: Apply theme IMMEDIATELY on page load
+    // This prevents color flashing during navigation
+    // ==========================================
+    (function immediateThemeApplication() {
+        try {
+            const savedTheme = localStorage.getItem('themePreference');
+            if (!savedTheme || savedTheme === 'light') {
+                return; // Default theme, no action needed
+            }
 
-    // Prevent duplicate registration
+            // Get saved settings from localStorage
+            const savedSettings = localStorage.getItem('themeSwitcherSettings');
+            if (!savedSettings) return;
+
+            const settings = JSON.parse(savedSettings);
+            const isDark = savedTheme === 'dark';
+            const colors = isDark ? settings.darkColors : settings.lightColors;
+
+            if (!colors || colors.length < 5) return;
+
+            // Apply theme IMMEDIATELY to prevent flash
+            const style = document.createElement('style');
+            style.id = 'theme-preload-styles';
+            style.textContent = `
+                html, body {
+                    background-color: ${colors[0]} !important;
+                    color: ${colors[4]} !important;
+                    transition: none !important;
+                }
+                * {
+                    transition: none !important;
+                }
+            `;
+            
+            // Insert at the very beginning of head
+            if (document.head) {
+                document.head.insertBefore(style, document.head.firstChild);
+            } else {
+                // If head doesn't exist yet, wait for it
+                const observer = new MutationObserver(() => {
+                    if (document.head) {
+                        document.head.insertBefore(style, document.head.firstChild);
+                        observer.disconnect();
+                    }
+                });
+                observer.observe(document.documentElement, { childList: true });
+            }
+
+            console.log('⚡ Pre-applied theme:', savedTheme);
+        } catch (e) {
+            console.warn('⚠️ Could not pre-apply theme:', e);
+        }
+    })();
+    
+    // Check if already defined to prevent duplicate registration
     if (customElements.get('theme-switcher')) {
         console.log('⚠️ theme-switcher already defined, skipping registration');
         return;
@@ -22,54 +77,41 @@
                 ],
                 currentTheme: 'light'
             };
+            this.originalColors = new WeakMap();
             this.defaultTheme = 'light';
             this.observer = null;
-            this.navigationObserver = null;
             this.isInitialized = false;
             this.themeChangeInProgress = false;
-            this._pendingTimeout = null;
-            this._reapplyTimeout = null;
-            this._navigationTimeout = null;
-            this._lastUrl = '';
+            this.pendingElements = new Set();
+            this.processedElements = new WeakSet();
         }
 
         connectedCallback() {
+            // Initialize IMMEDIATELY without waiting
             if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', () => this.initialize(), { once: true });
+                document.addEventListener('DOMContentLoaded', () => {
+                    this.initialize();
+                });
             } else {
-                // Small delay for Wix environment readiness
-                setTimeout(() => this.initialize(), 300);
+                // Start immediately
+                this.initialize();
             }
         }
 
         initialize() {
             if (this.isInitialized) return;
             this.isInitialized = true;
-
+            
             this.render();
-
-            this.waitForWixReady().then(() => {
-                this.loadSavedTheme();
-                this.applyCurrentTheme();
+            
+            // Initialize theme immediately
+            this.initializeTheme();
+            
+            // Setup observers after a short delay
+            setTimeout(() => {
                 this.setupMutationObserver();
-                this.setupNavigationDetection();
-            });
-        }
-
-        async waitForWixReady() {
-            return new Promise((resolve) => {
-                const check = () => {
-                    const wixEl = document.querySelector('[id^="SITE"]') ||
-                        document.querySelector('[data-hook]') ||
-                        document.querySelector('[class*="wix"]');
-                    if (wixEl && document.readyState === 'complete') {
-                        setTimeout(resolve, 500);
-                    } else {
-                        setTimeout(check, 100);
-                    }
-                };
-                check();
-            });
+                this.setupWixAppObserver();
+            }, 100);
         }
 
         static get observedAttributes() {
@@ -80,17 +122,12 @@
             if (newValue && newValue !== oldValue && name === 'settings') {
                 try {
                     const newSettings = JSON.parse(newValue);
-                    const themeChanged = (
-                        JSON.stringify(newSettings.lightColors) !== JSON.stringify(this.settings.lightColors) ||
-                        JSON.stringify(newSettings.darkColors) !== JSON.stringify(this.settings.darkColors)
-                    );
                     Object.assign(this.settings, newSettings);
-                    console.log('✅ Settings updated');
-
-                    // If colors changed from panel, re-apply theme
-                    if (themeChanged && this.isInitialized) {
-                        this.applyCurrentTheme();
-                    }
+                    
+                    // Save settings to localStorage for immediate application on next page
+                    localStorage.setItem('themeSwitcherSettings', JSON.stringify(this.settings));
+                    
+                    console.log('✅ Settings updated and saved');
                 } catch (e) {
                     console.error('❌ Failed to parse settings:', e);
                 }
@@ -108,6 +145,7 @@
                         align-items: center !important;
                         background: transparent !important;
                     }
+
                     .theme-switcher-container {
                         display: inline-flex;
                         align-items: center;
@@ -120,6 +158,7 @@
                         box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08);
                         position: relative;
                     }
+
                     .theme-icon {
                         font-size: 24px;
                         display: flex;
@@ -129,6 +168,7 @@
                         height: 28px;
                         user-select: none;
                     }
+
                     .toggle-switch {
                         position: relative;
                         width: 56px;
@@ -136,20 +176,26 @@
                         display: inline-block;
                         cursor: pointer;
                     }
+
                     .toggle-input {
                         opacity: 0;
                         width: 0;
                         height: 0;
                         position: absolute;
                     }
+
                     .toggle-slider {
                         position: absolute;
-                        top: 0; left: 0; right: 0; bottom: 0;
+                        top: 0;
+                        left: 0;
+                        right: 0;
+                        bottom: 0;
                         background-color: transparent;
                         border: 2px solid rgba(0, 0, 0, 0.2);
                         border-radius: 30px;
                         transition: all 0.3s ease;
                     }
+
                     .toggle-slider::before {
                         content: "";
                         position: absolute;
@@ -162,16 +208,20 @@
                         transition: transform 0.3s ease, background-color 0.3s ease;
                         box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
                     }
+
                     .toggle-input:checked + .toggle-slider {
                         border-color: rgba(0, 0, 0, 0.3);
                     }
+
                     .toggle-input:checked + .toggle-slider::before {
                         transform: translateX(28px);
                         background-color: #4169E1;
                     }
+
                     .auto-badge {
                         position: absolute;
-                        top: -8px; right: -8px;
+                        top: -8px;
+                        right: -8px;
                         background: #2ecc71;
                         color: white;
                         font-size: 8px;
@@ -183,16 +233,21 @@
                         letter-spacing: 0.5px;
                     }
                 </style>
+
                 <div class="theme-switcher-container">
                     ${this.settings.autoDetect ? '<span class="auto-badge">AUTO</span>' : ''}
+                    
                     <span class="theme-icon">☀️</span>
+                    
                     <label class="toggle-switch">
                         <input type="checkbox" class="toggle-input" id="themeToggle">
                         <span class="toggle-slider"></span>
                     </label>
+                    
                     <span class="theme-icon">🌙</span>
                 </div>
             `;
+
             this.setupToggleListener();
         }
 
@@ -200,161 +255,139 @@
             const toggle = this.querySelector('#themeToggle');
             if (toggle) {
                 toggle.addEventListener('change', (e) => {
-                    this.settings.currentTheme = e.target.checked ? 'dark' : 'light';
+                    const isChecked = e.target.checked;
+                    this.settings.currentTheme = isChecked ? 'dark' : 'light';
+                    
                     try {
                         localStorage.setItem('themePreference', this.settings.currentTheme);
-                    } catch (err) {
-                        console.warn('⚠️ Could not save to localStorage:', err);
+                    } catch (e) {
+                        console.warn('⚠️ Could not save to localStorage:', e);
                     }
+                    
                     console.log('🎚️ Toggle clicked! New theme:', this.settings.currentTheme);
-                    this.applyCurrentTheme();
+                    
+                    this.changeTheme();
                 });
             }
         }
 
-        // ─── NAVIGATION DETECTION ───────────────────────────────────────
-        // This is the KEY fix: detect Wix SPA page transitions and re-apply theme
-
-        setupNavigationDetection() {
-            this._lastUrl = window.location.href;
-
-            // Method 1: URL polling (most reliable for Wix SPA)
-            this._urlPollInterval = setInterval(() => {
-                if (window.location.href !== this._lastUrl) {
-                    console.log('🔄 Navigation detected (URL change):', this._lastUrl, '→', window.location.href);
-                    this._lastUrl = window.location.href;
-                    this.onPageNavigation();
-                }
-            }, 200);
-
-            // Method 2: Listen for popstate (back/forward navigation)
-            window.addEventListener('popstate', () => {
-                console.log('🔄 Navigation detected (popstate)');
-                this.onPageNavigation();
-            });
-
-            // Method 3: Intercept pushState and replaceState
-            const self = this;
-            const originalPushState = history.pushState;
-            const originalReplaceState = history.replaceState;
-
-            history.pushState = function () {
-                originalPushState.apply(this, arguments);
-                console.log('🔄 Navigation detected (pushState)');
-                self.onPageNavigation();
-            };
-
-            history.replaceState = function () {
-                originalReplaceState.apply(this, arguments);
-                // replaceState is often used for internal Wix state updates, not actual navigation
-                // Only trigger if URL actually changed
-                if (window.location.href !== self._lastUrl) {
-                    console.log('🔄 Navigation detected (replaceState)');
-                    self._lastUrl = window.location.href;
-                    self.onPageNavigation();
-                }
-            };
-
-            // Method 4: Watch for large-scale DOM changes indicating page swap
-            this.navigationObserver = new MutationObserver((mutations) => {
-                let addedCount = 0;
-                for (const mutation of mutations) {
-                    addedCount += mutation.addedNodes.length;
-                }
-                // If a large number of nodes were added at once, it's likely a page transition
-                if (addedCount > 20) {
-                    this.scheduleReapply('bulk-dom-change');
-                }
-            });
-
-            // Observe only direct children of main content areas for navigation detection
-            const mainContent = document.querySelector('#SITE_PAGES') ||
-                document.querySelector('[id^="SITE"]') ||
-                document.body;
-
-            this.navigationObserver.observe(mainContent, {
-                childList: true,
-                subtree: true
-            });
-        }
-
-        onPageNavigation() {
-            if (this.settings.currentTheme === this.defaultTheme) return;
-
-            console.log('📄 Page navigation detected — scheduling theme re-application');
-
-            // Clear any existing navigation timeout
-            clearTimeout(this._navigationTimeout);
-
-            // Apply theme in multiple waves to catch elements as they render
-            // Wave 1: Immediate (catch early elements)
-            this._navigationTimeout = setTimeout(() => {
-                this.applyCurrentTheme();
-            }, 100);
-
-            // Wave 2: After short delay (catch most Wix-rendered elements)
-            setTimeout(() => {
-                this.applyCurrentTheme();
-            }, 500);
-
-            // Wave 3: After longer delay (catch lazy-loaded elements like product pages, stores)
-            setTimeout(() => {
-                this.applyCurrentTheme();
-            }, 1200);
-
-            // Wave 4: Final safety net
-            setTimeout(() => {
-                this.applyCurrentTheme();
-            }, 2500);
-        }
-
-        // ─── MUTATION OBSERVER FOR DYNAMIC ELEMENTS ─────────────────────
-
         setupMutationObserver() {
             this.observer = new MutationObserver((mutations) => {
                 if (this.themeChangeInProgress) return;
-                if (this.settings.currentTheme === this.defaultTheme) return;
-
-                let hasNewElements = false;
-
-                for (const mutation of mutations) {
-                    if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-                        hasNewElements = true;
-                        break;
+                
+                const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+                if (isDefaultTheme) return;
+                
+                const isDark = this.settings.currentTheme === 'dark';
+                
+                mutations.forEach(mutation => {
+                    if (mutation.type === 'childList') {
+                        mutation.addedNodes.forEach(node => {
+                            if (node.nodeType === Node.ELEMENT_NODE) {
+                                this.pendingElements.add(node);
+                            }
+                        });
                     }
-                }
-
-                if (hasNewElements) {
-                    this.scheduleReapply('mutation');
-                }
+                });
+                
+                clearTimeout(this.pendingTimeout);
+                this.pendingTimeout = setTimeout(() => {
+                    this.processPendingElements(isDark);
+                }, 100);
             });
 
             this.observer.observe(document.body, {
                 childList: true,
+                subtree: true,
+                attributes: true,
+                attributeFilter: ['style', 'class']
+            });
+        }
+
+        processPendingElements(isDark) {
+            this.pendingElements.forEach(node => {
+                if (!this.processedElements.has(node)) {
+                    this.storeOriginalColorsForElement(node);
+                    this.processElement(node, isDark);
+                    
+                    if (node.shadowRoot) {
+                        this.processShadowRoot(node.shadowRoot, isDark);
+                    }
+                    
+                    const descendants = node.querySelectorAll('*');
+                    descendants.forEach(el => {
+                        if (!this.processedElements.has(el)) {
+                            this.storeOriginalColorsForElement(el);
+                            this.processElement(el, isDark);
+                        }
+                    });
+                    
+                    this.processedElements.add(node);
+                }
+            });
+            
+            this.pendingElements.clear();
+        }
+
+        setupWixAppObserver() {
+            const wixAppObserver = new MutationObserver((mutations) => {
+                if (this.themeChangeInProgress) return;
+                
+                const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+                if (isDefaultTheme) return;
+                
+                const isDark = this.settings.currentTheme === 'dark';
+                
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            if (this.isWixAppElement(node)) {
+                                console.log('🎯 Detected Wix app element:', node);
+                                setTimeout(() => {
+                                    this.deepProcessWidget(node, isDark);
+                                }, 200);
+                            }
+                        }
+                    });
+                });
+            });
+
+            wixAppObserver.observe(document.body, {
+                childList: true,
                 subtree: true
             });
         }
 
-        scheduleReapply(source) {
-            clearTimeout(this._reapplyTimeout);
-            this._reapplyTimeout = setTimeout(() => {
-                if (this.settings.currentTheme !== this.defaultTheme) {
-                    console.log(`🔁 Re-applying theme (triggered by: ${source})`);
-                    this.applyThemeToAllElements(this.settings.currentTheme === 'dark');
+        isWixAppElement(element) {
+            const wixAppSelectors = [
+                '[data-hook*="product"]',
+                '[data-hook*="breadcrumb"]',
+                '[data-hook*="cart"]',
+                '[class*="product"]',
+                '[class*="breadcrumb"]',
+                '[id*="STORES"]',
+                '[id*="PRODUCT"]',
+                '[data-testid]'
+            ];
+            
+            return wixAppSelectors.some(selector => {
+                try {
+                    return element.matches(selector) || element.querySelector(selector);
+                } catch (e) {
+                    return false;
                 }
-            }, 150);
+            });
         }
 
-        // ─── THEME LOADING ──────────────────────────────────────────────
-
-        loadSavedTheme() {
+        initializeTheme() {
             let savedTheme = null;
+            
             try {
                 savedTheme = localStorage.getItem('themePreference');
             } catch (e) {
                 console.warn('⚠️ Could not access localStorage:', e);
             }
-
+            
             if (savedTheme) {
                 this.settings.currentTheme = savedTheme;
                 console.log('📁 Loaded saved theme:', savedTheme);
@@ -363,290 +396,86 @@
                 this.settings.currentTheme = prefersDark ? 'dark' : 'light';
                 console.log('🌐 Using browser preference:', this.settings.currentTheme);
             }
-
-            // Sync toggle state
+            
+            // Store original colors
+            requestAnimationFrame(() => {
+                console.log('💾 Storing original colors...');
+                this.storeOriginalColors();
+            });
+            
             const toggle = this.querySelector('#themeToggle');
             if (toggle) {
                 toggle.checked = (this.settings.currentTheme === 'dark');
             }
-        }
-
-        // ─── CORE THEME APPLICATION ─────────────────────────────────────
-        // KEY CHANGE: Instead of storing "original" colors and mapping them,
-        // we now do a LIVE read of each element's computed style at the time
-        // of theme application. This eliminates the stale-color problem
-        // during SPA navigation.
-
-        applyCurrentTheme() {
-            const isDefault = this.settings.currentTheme === this.defaultTheme;
-
-            if (isDefault) {
-                this.removeAllThemeOverrides();
-                return;
-            }
-
-            const isDark = this.settings.currentTheme === 'dark';
-            console.log(`🎨 Applying ${isDark ? 'DARK' : 'LIGHT'} mode`);
-
-            // Set CSS custom properties
-            const colors = isDark ? this.settings.darkColors : this.settings.lightColors;
-            const root = document.documentElement;
-            colors.forEach((color, index) => {
-                root.style.setProperty(`--theme-color-${index + 1}`, color);
-            });
-            root.style.setProperty('--theme-bg', colors[0]);
-            root.style.setProperty('--theme-text', colors[4]);
-            root.setAttribute('data-theme', this.settings.currentTheme);
-
-            // Apply to body
-            document.body.style.setProperty('background-color', colors[0], 'important');
-            document.body.style.setProperty('color', colors[4], 'important');
-
-            // Apply to all elements
-            this.applyThemeToAllElements(isDark);
-        }
-
-        applyThemeToAllElements(toDark) {
-            this.themeChangeInProgress = true;
-
-            requestAnimationFrame(() => {
-                const allElements = document.querySelectorAll('*');
-                let changedCount = 0;
-
-                allElements.forEach(element => {
-                    changedCount += this.processElementLive(element, toDark);
-                });
-
-                // Process shadow roots
-                allElements.forEach(element => {
-                    if (element.shadowRoot) {
-                        this.processShadowRootLive(element.shadowRoot, toDark);
+            
+            const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+            if (!isDefaultTheme) {
+                console.log('⚡ Applying non-default theme immediately');
+                // Apply theme IMMEDIATELY without delay
+                this.changeTheme();
+                
+                // Remove pre-load styles after theme is applied
+                setTimeout(() => {
+                    const preloadStyles = document.getElementById('theme-preload-styles');
+                    if (preloadStyles) {
+                        preloadStyles.remove();
                     }
-                });
-
-                // Process iframes
-                this.processAllIframes(toDark);
-
-                console.log(`✅ Themed ${changedCount} elements`);
-
-                this.themeChangeInProgress = false;
-            });
+                    // Re-enable transitions
+                    document.body.style.transition = 'all 0.3s ease';
+                }, 100);
+            } else {
+                console.log('✅ Default theme active - no changes needed');
+            }
         }
 
-        // ─── LIVE ELEMENT PROCESSING ────────────────────────────────────
-        // Reads the element's CURRENT computed style and converts colors.
-        // No WeakMap storage needed — we read fresh every time.
+        storeOriginalColors() {
+            const allElements = document.querySelectorAll('*');
+            
+            allElements.forEach(element => {
+                this.storeOriginalColorsForElement(element);
+                
+                if (element.shadowRoot) {
+                    const shadowElements = element.shadowRoot.querySelectorAll('*');
+                    shadowElements.forEach(shadowEl => {
+                        this.storeOriginalColorsForElement(shadowEl);
+                    });
+                }
+            });
 
-        processElementLive(element, toDark) {
-            // Skip our own toggle element
-            if (element.closest('theme-switcher')) return 0;
+            console.log('✅ Stored original colors for', allElements.length, 'elements');
+        }
 
-            let changed = 0;
+        storeOriginalColorsForElement(element) {
+            if (element.closest('theme-switcher')) return;
+            if (this.originalColors.has(element)) return;
 
             try {
-                const computed = window.getComputedStyle(element);
-
-                // Background color
-                const bgColor = computed.backgroundColor;
-                if (bgColor && bgColor !== 'transparent' && bgColor !== 'rgba(0, 0, 0, 0)') {
-                    // Check if this color is already a "target" color (already themed)
-                    if (!this.isAlreadyThemedColor(bgColor, toDark)) {
-                        const newBg = this.convertColor(bgColor, toDark);
-                        if (newBg) {
-                            element.style.setProperty('background-color', newBg, 'important');
-                            changed++;
-                        }
-                    }
-                }
-
-                // Text color
-                const textColor = computed.color;
-                if (textColor) {
-                    if (!this.isAlreadyThemedColor(textColor, toDark)) {
-                        const newColor = this.convertColor(textColor, toDark);
-                        if (newColor) {
-                            element.style.setProperty('color', newColor, 'important');
-                            changed++;
-                        }
-                    }
-                }
-
-                // Border colors
-                ['borderTopColor', 'borderRightColor', 'borderBottomColor', 'borderLeftColor'].forEach(prop => {
-                    const borderColor = computed[prop];
-                    if (borderColor && borderColor !== 'transparent' && borderColor !== 'rgba(0, 0, 0, 0)') {
-                        if (!this.isAlreadyThemedColor(borderColor, toDark)) {
-                            const newBorder = this.convertColor(borderColor, toDark);
-                            if (newBorder) {
-                                element.style.setProperty(
-                                    prop.replace(/([A-Z])/g, '-$1').toLowerCase(),
-                                    newBorder,
-                                    'important'
-                                );
-                            }
-                        }
-                    }
+                const computedStyle = window.getComputedStyle(element);
+                
+                this.originalColors.set(element, {
+                    backgroundColor: computedStyle.backgroundColor,
+                    color: computedStyle.color,
+                    borderTopColor: computedStyle.borderTopColor,
+                    borderRightColor: computedStyle.borderRightColor,
+                    borderBottomColor: computedStyle.borderBottomColor,
+                    borderLeftColor: computedStyle.borderLeftColor,
+                    fill: computedStyle.fill,
+                    stroke: computedStyle.stroke,
+                    backgroundImage: computedStyle.backgroundImage,
+                    webkitTextFillColor: computedStyle.webkitTextFillColor || computedStyle.getPropertyValue('-webkit-text-fill-color'),
+                    inlineBackgroundColor: element.style.backgroundColor,
+                    inlineColor: element.style.color
                 });
-
-                // Fill and stroke (SVG)
-                const fill = computed.fill;
-                if (fill && fill !== 'none' && fill !== 'transparent') {
-                    if (!this.isAlreadyThemedColor(fill, toDark)) {
-                        const newFill = this.convertColor(fill, toDark);
-                        if (newFill) element.style.fill = newFill;
-                    }
-                }
-
-                const stroke = computed.stroke;
-                if (stroke && stroke !== 'none' && stroke !== 'transparent') {
-                    if (!this.isAlreadyThemedColor(stroke, toDark)) {
-                        const newStroke = this.convertColor(stroke, toDark);
-                        if (newStroke) element.style.stroke = newStroke;
-                    }
-                }
-
-                // Gradients
-                const bgImage = computed.backgroundImage;
-                if (bgImage && bgImage !== 'none' && bgImage.includes('gradient')) {
-                    const newGradient = this.convertGradient(bgImage, toDark);
-                    if (newGradient && newGradient !== bgImage) {
-                        element.style.backgroundImage = newGradient;
-                    }
-                }
-
-                // Webkit text fill (gradient text)
-                const textFill = computed.webkitTextFillColor || computed.getPropertyValue('-webkit-text-fill-color');
-                if (textFill === 'transparent' && bgImage && bgImage.includes('gradient')) {
-                    const newGradient = this.convertGradient(bgImage, toDark);
-                    if (newGradient) {
-                        element.style.backgroundImage = newGradient;
-                        element.style.webkitBackgroundClip = 'text';
-                        element.style.backgroundClip = 'text';
-                    }
-                }
-
             } catch (e) {
                 // Element not accessible, skip
             }
-
-            return changed;
         }
-
-        /**
-         * Check if a color is already one of the TARGET theme colors.
-         * This prevents double-conversion (e.g., converting an already-dark color again).
-         */
-        isAlreadyThemedColor(colorString, toDark) {
-            const parsed = this.parseColor(colorString);
-            if (!parsed) return false;
-
-            const targetColors = toDark ? this.settings.darkColors : this.settings.lightColors;
-
-            for (const tc of targetColors) {
-                const targetParsed = this.parseColor(tc);
-                if (targetParsed && this.colorDistance(parsed, targetParsed) < 5) {
-                    return true; // Already themed — skip
-                }
-            }
-
-            return false;
-        }
-
-        processShadowRootLive(shadowRoot, toDark) {
-            try {
-                const elements = shadowRoot.querySelectorAll('*');
-                elements.forEach(el => {
-                    this.processElementLive(el, toDark);
-                    if (el.shadowRoot) {
-                        this.processShadowRootLive(el.shadowRoot, toDark);
-                    }
-                });
-            } catch (e) {
-                // Shadow root not accessible
-            }
-        }
-
-        processAllIframes(toDark) {
-            const iframes = document.querySelectorAll('iframe');
-            iframes.forEach(iframe => {
-                try {
-                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
-                    if (iframeDoc) {
-                        const elements = iframeDoc.querySelectorAll('*');
-                        elements.forEach(el => this.processElementLive(el, toDark));
-                    }
-                } catch (e) {
-                    // Cross-origin iframe
-                }
-            });
-        }
-
-        // ─── RESTORE TO DEFAULT ─────────────────────────────────────────
-
-        removeAllThemeOverrides() {
-            console.log('🔄 Restoring default theme (removing all inline overrides)...');
-
-            const root = document.documentElement;
-            root.removeAttribute('data-theme');
-            for (let i = 1; i <= 10; i++) {
-                root.style.removeProperty(`--theme-color-${i}`);
-            }
-            root.style.removeProperty('--theme-bg');
-            root.style.removeProperty('--theme-text');
-
-            document.body.style.removeProperty('background-color');
-            document.body.style.removeProperty('color');
-
-            const allElements = document.querySelectorAll('*');
-            allElements.forEach(element => {
-                if (element.closest('theme-switcher')) return;
-                try {
-                    element.style.removeProperty('background-color');
-                    element.style.removeProperty('color');
-                    element.style.removeProperty('border-top-color');
-                    element.style.removeProperty('border-right-color');
-                    element.style.removeProperty('border-bottom-color');
-                    element.style.removeProperty('border-left-color');
-                    element.style.removeProperty('fill');
-                    element.style.removeProperty('stroke');
-                    element.style.removeProperty('background-image');
-                    element.style.removeProperty('-webkit-text-fill-color');
-                    element.style.removeProperty('-webkit-background-clip');
-                    element.style.removeProperty('background-clip');
-                } catch (e) { }
-            });
-
-            // Also restore shadow roots
-            allElements.forEach(element => {
-                if (element.shadowRoot) {
-                    try {
-                        element.shadowRoot.querySelectorAll('*').forEach(el => {
-                            el.style.removeProperty('background-color');
-                            el.style.removeProperty('color');
-                            el.style.removeProperty('border-top-color');
-                            el.style.removeProperty('border-right-color');
-                            el.style.removeProperty('border-bottom-color');
-                            el.style.removeProperty('border-left-color');
-                            el.style.removeProperty('fill');
-                            el.style.removeProperty('stroke');
-                            el.style.removeProperty('background-image');
-                            el.style.removeProperty('-webkit-text-fill-color');
-                            el.style.removeProperty('-webkit-background-clip');
-                            el.style.removeProperty('background-clip');
-                        });
-                    } catch (e) { }
-                }
-            });
-
-            console.log('✅ Default theme restored');
-        }
-
-        // ─── COLOR UTILITIES ────────────────────────────────────────────
 
         parseColor(colorString) {
             if (!colorString || colorString === 'transparent' || colorString === 'none') {
                 return null;
             }
+
             colorString = colorString.trim().toLowerCase();
 
             const rgbMatch = colorString.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)(?:,\s*([\d.]+))?\)/);
@@ -661,23 +490,21 @@
 
             if (colorString.startsWith('#')) {
                 const hex = colorString.replace('#', '');
-                const short = hex.length === 3;
-                return {
-                    r: parseInt(short ? hex[0] + hex[0] : hex.substring(0, 2), 16),
-                    g: parseInt(short ? hex[1] + hex[1] : hex.substring(2, 4), 16),
-                    b: parseInt(short ? hex[2] + hex[2] : hex.substring(4, 6), 16),
-                    a: 1
-                };
+                const shortHex = hex.length === 3;
+                const r = parseInt(shortHex ? hex[0] + hex[0] : hex.substring(0, 2), 16);
+                const g = parseInt(shortHex ? hex[1] + hex[1] : hex.substring(2, 4), 16);
+                const b = parseInt(shortHex ? hex[2] + hex[2] : hex.substring(4, 6), 16);
+                return { r, g, b, a: 1 };
             }
 
             return null;
         }
 
-        colorDistance(c1, c2) {
+        colorDistance(color1, color2) {
             return Math.sqrt(
-                Math.pow(c1.r - c2.r, 2) +
-                Math.pow(c1.g - c2.g, 2) +
-                Math.pow(c1.b - c2.b, 2)
+                Math.pow(color1.r - color2.r, 2) +
+                Math.pow(color1.g - color2.g, 2) +
+                Math.pow(color1.b - color2.b, 2)
             );
         }
 
@@ -691,9 +518,9 @@
             colorArray.forEach((color, index) => {
                 const parsed = this.parseColor(color);
                 if (parsed) {
-                    const dist = this.colorDistance(target, parsed);
-                    if (dist < minDistance) {
-                        minDistance = dist;
+                    const distance = this.colorDistance(target, parsed);
+                    if (distance < minDistance) {
+                        minDistance = distance;
                         closestIndex = index;
                     }
                 }
@@ -710,22 +537,22 @@
             const targetColors = toDark ? this.settings.darkColors : this.settings.lightColors;
 
             const closestIndex = this.findClosestColorIndex(colorString, sourceColors);
-
+            
             if (closestIndex !== -1) {
-                const replacement = targetColors[closestIndex];
-
+                const replacementColor = targetColors[closestIndex];
+                
                 if (parsed.a < 1) {
-                    const rp = this.parseColor(replacement);
-                    if (rp) {
-                        return `rgba(${rp.r}, ${rp.g}, ${rp.b}, ${parsed.a})`;
+                    const replacementParsed = this.parseColor(replacementColor);
+                    if (replacementParsed) {
+                        return `rgba(${replacementParsed.r}, ${replacementParsed.g}, ${replacementParsed.b}, ${parsed.a})`;
                     }
                 }
-                return replacement;
+                
+                return replacementColor;
             }
 
-            // Fallback: brightness-based mapping
             const brightness = (parsed.r * 0.299 + parsed.g * 0.587 + parsed.b * 0.114);
-
+            
             if (toDark) {
                 if (brightness > 230) return targetColors[0];
                 if (brightness > 200) return targetColors[1];
@@ -759,19 +586,340 @@
             return converted;
         }
 
-        // ─── CLEANUP ────────────────────────────────────────────────────
+        changeTheme() {
+            this.themeChangeInProgress = true;
+            
+            const isDark = this.settings.currentTheme === 'dark';
+            const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+            const colors = isDark ? this.settings.darkColors : this.settings.lightColors;
+
+            console.log(`🎨 Changing to ${isDark ? 'DARK' : 'LIGHT'} mode`);
+
+            const root = document.documentElement;
+            
+            colors.forEach((color, index) => {
+                root.style.setProperty(`--theme-color-${index + 1}`, color);
+            });
+
+            root.style.setProperty('--theme-bg', colors[0]);
+            root.style.setProperty('--theme-text', colors[4]);
+            root.setAttribute('data-theme', this.settings.currentTheme);
+
+            if (isDefaultTheme) {
+                document.body.style.backgroundColor = '';
+                document.body.style.color = '';
+                
+                this.restoreOriginalColors();
+                this.restoreAllShadowRoots();
+            } else {
+                document.body.style.backgroundColor = colors[0];
+                document.body.style.color = colors[4];
+                
+                // Apply immediately
+                this.changeAllColors(isDark);
+                this.processAllShadowRoots(isDark);
+                this.processAllIframes(isDark);
+                this.processWixWidgets(document.body, isDark);
+                
+                // Final pass for any missed elements
+                setTimeout(() => {
+                    this.finalPassForMissedElements(isDark);
+                    this.themeChangeInProgress = false;
+                }, 200);
+            }
+        }
+
+        finalPassForMissedElements(isDark) {
+            console.log('🔍 Final pass for missed elements...');
+            
+            const missedSelectors = [
+                '[data-hook*="breadcrumb"]',
+                '[data-hook*="product-title"]',
+                '[data-hook*="product-description"]',
+                '[data-hook*="price"]',
+                '[class*="breadcrumb"]',
+                '[class*="product-title"]',
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a'
+            ];
+            
+            missedSelectors.forEach(selector => {
+                try {
+                    const elements = document.querySelectorAll(selector);
+                    elements.forEach(el => {
+                        if (!this.processedElements.has(el)) {
+                            this.storeOriginalColorsForElement(el);
+                            this.processElement(el, isDark);
+                            this.processedElements.add(el);
+                        }
+                    });
+                } catch (e) {
+                    // Invalid selector, skip
+                }
+            });
+        }
+
+        restoreOriginalColors() {
+            console.log('🔄 Restoring original colors (removing inline styles)...');
+            
+            this.themeChangeInProgress = false;
+            const allElements = document.querySelectorAll('*');
+            let restoredCount = 0;
+
+            allElements.forEach(element => {
+                if (element.closest('theme-switcher')) return;
+
+                if (this.originalColors.has(element)) {
+                    try {
+                        element.style.backgroundColor = '';
+                        element.style.color = '';
+                        element.style.borderTopColor = '';
+                        element.style.borderRightColor = '';
+                        element.style.borderBottomColor = '';
+                        element.style.borderLeftColor = '';
+                        element.style.fill = '';
+                        element.style.stroke = '';
+                        element.style.backgroundImage = '';
+                        element.style.webkitTextFillColor = '';
+                        element.style.webkitBackgroundClip = '';
+                        element.style.backgroundClip = '';
+                        restoredCount++;
+                    } catch (e) {
+                        // Element not accessible, skip
+                    }
+                }
+            });
+
+            this.processedElements = new WeakSet();
+            console.log(`✅ Restored ${restoredCount} elements by removing inline styles`);
+        }
+
+        restoreAllShadowRoots() {
+            console.log('👻 Restoring shadow DOMs...');
+            
+            const allElements = document.querySelectorAll('*');
+            
+            allElements.forEach(element => {
+                if (element.shadowRoot) {
+                    const shadowElements = element.shadowRoot.querySelectorAll('*');
+                    shadowElements.forEach(shadowEl => {
+                        if (this.originalColors.has(shadowEl)) {
+                            try {
+                                shadowEl.style.backgroundColor = '';
+                                shadowEl.style.color = '';
+                                shadowEl.style.borderTopColor = '';
+                                shadowEl.style.borderRightColor = '';
+                                shadowEl.style.borderBottomColor = '';
+                                shadowEl.style.borderLeftColor = '';
+                                shadowEl.style.fill = '';
+                                shadowEl.style.stroke = '';
+                                shadowEl.style.backgroundImage = '';
+                                shadowEl.style.webkitTextFillColor = '';
+                                shadowEl.style.webkitBackgroundClip = '';
+                                shadowEl.style.backgroundClip = '';
+                            } catch (e) {
+                                // Element not accessible, skip
+                            }
+                        }
+                    });
+                }
+            });
+        }
+
+        changeAllColors(toDark) {
+            console.log('🔄 Converting to alternate theme...');
+            
+            const allElements = document.querySelectorAll('*');
+            let changedCount = 0;
+
+            allElements.forEach(element => {
+                changedCount += this.processElement(element, toDark);
+                this.processedElements.add(element);
+            });
+
+            console.log(`✅ Converted ${changedCount} elements`);
+        }
+
+        processElement(element, toDark) {
+            if (element.closest('theme-switcher')) return 0;
+
+            const original = this.originalColors.get(element);
+            if (!original) {
+                this.storeOriginalColorsForElement(element);
+                return 0;
+            }
+
+            let changed = 0;
+
+            try {
+                const newBg = this.convertColor(original.backgroundColor, toDark);
+                if (newBg) {
+                    element.style.setProperty('background-color', newBg, 'important');
+                    changed++;
+                }
+
+                const newColor = this.convertColor(original.color, toDark);
+                if (newColor) {
+                    element.style.setProperty('color', newColor, 'important');
+                }
+
+                const newBorderTop = this.convertColor(original.borderTopColor, toDark);
+                if (newBorderTop) element.style.borderTopColor = newBorderTop;
+
+                const newBorderRight = this.convertColor(original.borderRightColor, toDark);
+                if (newBorderRight) element.style.borderRightColor = newBorderRight;
+
+                const newBorderBottom = this.convertColor(original.borderBottomColor, toDark);
+                if (newBorderBottom) element.style.borderBottomColor = newBorderBottom;
+
+                const newBorderLeft = this.convertColor(original.borderLeftColor, toDark);
+                if (newBorderLeft) element.style.borderLeftColor = newBorderLeft;
+
+                if (original.fill && original.fill !== 'none') {
+                    const newFill = this.convertColor(original.fill, toDark);
+                    if (newFill) element.style.fill = newFill;
+                }
+
+                if (original.stroke && original.stroke !== 'none') {
+                    const newStroke = this.convertColor(original.stroke, toDark);
+                    if (newStroke) element.style.stroke = newStroke;
+                }
+
+                if (original.backgroundImage && original.backgroundImage !== 'none' && original.backgroundImage.includes('gradient')) {
+                    const newGradient = this.convertGradient(original.backgroundImage, toDark);
+                    if (newGradient) {
+                        element.style.backgroundImage = newGradient;
+                    }
+                }
+
+                if (original.webkitTextFillColor === 'transparent' && original.backgroundImage && original.backgroundImage.includes('gradient')) {
+                    const newGradient = this.convertGradient(original.backgroundImage, toDark);
+                    if (newGradient) {
+                        element.style.backgroundImage = newGradient;
+                        element.style.webkitBackgroundClip = 'text';
+                        element.style.backgroundClip = 'text';
+                    }
+                }
+
+            } catch (e) {
+                // Element not accessible, skip
+            }
+
+            return changed;
+        }
+
+        processAllShadowRoots(toDark) {
+            console.log('👻 Processing shadow DOMs...');
+            
+            const allElements = document.querySelectorAll('*');
+            let shadowCount = 0;
+            
+            allElements.forEach(element => {
+                if (element.shadowRoot) {
+                    this.processShadowRoot(element.shadowRoot, toDark);
+                    shadowCount++;
+                }
+            });
+
+            console.log(`✅ Processed ${shadowCount} shadow DOMs`);
+        }
+
+        processShadowRoot(shadowRoot, toDark) {
+            const shadowElements = shadowRoot.querySelectorAll('*');
+            
+            shadowElements.forEach(element => {
+                this.storeOriginalColorsForElement(element);
+                this.processElement(element, toDark);
+                this.processedElements.add(element);
+            });
+
+            shadowElements.forEach(element => {
+                if (element.shadowRoot) {
+                    this.processShadowRoot(element.shadowRoot, toDark);
+                }
+            });
+        }
+
+        processAllIframes(toDark) {
+            console.log('🖼️ Processing iframes...');
+            
+            const iframes = document.querySelectorAll('iframe');
+            let processedCount = 0;
+
+            iframes.forEach(iframe => {
+                try {
+                    const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                    
+                    if (iframeDoc) {
+                        const iframeElements = iframeDoc.querySelectorAll('*');
+                        iframeElements.forEach(element => {
+                            this.storeOriginalColorsForElement(element);
+                            this.processElement(element, toDark);
+                            this.processedElements.add(element);
+                        });
+                        processedCount++;
+                    }
+                } catch (e) {
+                    // Cross-origin iframe, cannot access
+                }
+            });
+
+            console.log(`✅ Processed ${processedCount} accessible iframes`);
+        }
+
+        processWixWidgets(container, toDark) {
+            console.log('🎯 Processing Wix widgets...');
+            
+            const wixSelectors = [
+                '[data-hook*="chat"]', '[class*="chat"]', '#SITE_CHAT',
+                '[id*="chat"]', '[aria-label*="chat" i]',
+                '[role="listbox"]', '[role="combobox"]', '[class*="dropdown"]',
+                '[class*="select"]', '[class*="currency"]', 'select',
+                '[data-hook*="cart"]', '[class*="cart"]', '#SITE_CART',
+                '[id*="cart"]', '[aria-label*="cart" i]',
+                '[data-hook*="product"]', '[class*="product"]',
+                '[data-hook*="breadcrumb"]', '[class*="breadcrumb"]',
+                '[id*="STORES"]', '[id*="PRODUCT"]',
+                '[data-testid]'
+            ];
+            
+            wixSelectors.forEach(selector => {
+                try {
+                    const widgets = container.querySelectorAll(selector);
+                    widgets.forEach(widget => {
+                        this.deepProcessWidget(widget, toDark);
+                    });
+                } catch (e) {
+                    // Invalid selector, skip
+                }
+            });
+        }
+
+        deepProcessWidget(widget, toDark) {
+            this.storeOriginalColorsForElement(widget);
+            this.processElement(widget, toDark);
+            this.processedElements.add(widget);
+            
+            const descendants = widget.querySelectorAll('*');
+            descendants.forEach(el => {
+                this.storeOriginalColorsForElement(el);
+                this.processElement(el, toDark);
+                this.processedElements.add(el);
+            });
+            
+            if (widget.shadowRoot) {
+                this.processShadowRoot(widget.shadowRoot, toDark);
+            }
+        }
 
         disconnectedCallback() {
-            if (this.observer) this.observer.disconnect();
-            if (this.navigationObserver) this.navigationObserver.disconnect();
-            clearTimeout(this._pendingTimeout);
-            clearTimeout(this._reapplyTimeout);
-            clearTimeout(this._navigationTimeout);
-            clearInterval(this._urlPollInterval);
+            if (this.observer) {
+                this.observer.disconnect();
+            }
+            clearTimeout(this.pendingTimeout);
         }
     }
 
-    // Register
+    // Register the custom element
     try {
         customElements.define('theme-switcher', ThemeSwitcherElement);
         console.log('✅ theme-switcher custom element registered successfully');
@@ -782,6 +930,7 @@
     if (typeof module !== 'undefined' && module.exports) {
         module.exports = { ThemeSwitcherElement };
     }
+    
     window.ThemeSwitcherElement = ThemeSwitcherElement;
 
 })();
