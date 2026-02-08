@@ -29,6 +29,8 @@
             this.themeChangeInProgress = false;
             this.pendingElements = new Set();
             this.processedElements = new WeakSet();
+            this.reapplyTimer = null;
+            this.pageChangeDetected = false;
         }
 
         connectedCallback() {
@@ -56,6 +58,7 @@
                 this.initializeTheme();
                 this.setupMutationObserver();
                 this.setupWixAppObserver();
+                this.setupPageChangeDetection();
             });
         }
 
@@ -76,6 +79,100 @@
                 };
                 checkWixReady();
             });
+        }
+
+        setupPageChangeDetection() {
+            // Monitor for Wix page transitions
+            let lastUrl = location.href;
+            
+            // Watch for URL changes (Wix SPA navigation)
+            const urlObserver = new MutationObserver(() => {
+                if (location.href !== lastUrl) {
+                    lastUrl = location.href;
+                    console.log('🔄 Page navigation detected!');
+                    this.handlePageChange();
+                }
+            });
+            
+            urlObserver.observe(document.querySelector('body'), {
+                childList: true,
+                subtree: true
+            });
+
+            // Also listen for popstate events
+            window.addEventListener('popstate', () => {
+                console.log('🔄 Browser navigation detected!');
+                this.handlePageChange();
+            });
+
+            // Monitor for Wix-specific page container changes
+            const pageObserver = new MutationObserver((mutations) => {
+                mutations.forEach(mutation => {
+                    mutation.addedNodes.forEach(node => {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            // Check if this is a Wix page container
+                            if (node.id && (node.id.startsWith('PAGES_CONTAINER') || 
+                                          node.id.includes('SITE_') ||
+                                          node.hasAttribute('data-mesh-id'))) {
+                                console.log('🔄 Wix page container changed!');
+                                this.handlePageChange();
+                            }
+                        }
+                    });
+                });
+            });
+
+            pageObserver.observe(document.body, {
+                childList: true,
+                subtree: false
+            });
+        }
+
+        handlePageChange() {
+            if (this.pageChangeDetected) return;
+            this.pageChangeDetected = true;
+
+            console.log('⏳ Waiting for new page to fully load...');
+
+            // Clear any existing timers
+            clearTimeout(this.reapplyTimer);
+
+            // Wait for Wix to finish rendering the new page
+            this.reapplyTimer = setTimeout(() => {
+                console.log('🎨 Reapplying theme after page change...');
+                
+                const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
+                
+                if (!isDefaultTheme) {
+                    // Reset processed elements so they get reprocessed
+                    this.processedElements = new WeakSet();
+                    
+                    // Store colors for new elements
+                    this.storeOriginalColors();
+                    
+                    // Reapply theme
+                    const isDark = this.settings.currentTheme === 'dark';
+                    this.changeAllColors(isDark);
+                    this.processAllShadowRoots(isDark);
+                    this.processWixWidgets(document.body, isDark);
+                    
+                    // Additional passes to catch late-loading elements
+                    setTimeout(() => {
+                        this.finalPassForMissedElements(isDark);
+                    }, 500);
+                    
+                    setTimeout(() => {
+                        this.finalPassForMissedElements(isDark);
+                    }, 1000);
+                    
+                    setTimeout(() => {
+                        this.finalPassForMissedElements(isDark);
+                        this.pageChangeDetected = false;
+                    }, 2000);
+                } else {
+                    this.pageChangeDetected = false;
+                }
+            }, 1000); // Wait 1 second for page to settle
         }
 
         static get observedAttributes() {
@@ -233,7 +330,7 @@
 
         setupMutationObserver() {
             this.observer = new MutationObserver((mutations) => {
-                if (this.themeChangeInProgress) return;
+                if (this.themeChangeInProgress || this.pageChangeDetected) return;
                 
                 const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
                 if (isDefaultTheme) return;
@@ -248,6 +345,13 @@
                                 this.pendingElements.add(node);
                             }
                         });
+                    } else if (mutation.type === 'attributes' && 
+                             (mutation.attributeName === 'style' || mutation.attributeName === 'class')) {
+                        // Re-process element if its style was changed
+                        const target = mutation.target;
+                        if (target.nodeType === Node.ELEMENT_NODE && !target.closest('theme-switcher')) {
+                            this.pendingElements.add(target);
+                        }
                     }
                 });
                 
@@ -295,7 +399,7 @@
         setupWixAppObserver() {
             // Special observer for Wix app elements that load late
             const wixAppObserver = new MutationObserver((mutations) => {
-                if (this.themeChangeInProgress) return;
+                if (this.themeChangeInProgress || this.pageChangeDetected) return;
                 
                 const isDefaultTheme = this.settings.currentTheme === this.defaultTheme;
                 if (isDefaultTheme) return;
@@ -581,11 +685,19 @@
                         this.processAllIframes(isDark);
                         this.processWixWidgets(document.body, isDark);
                         
-                        // Final pass for any missed elements
+                        // Multiple passes for any missed elements
+                        setTimeout(() => {
+                            this.finalPassForMissedElements(isDark);
+                        }, 300);
+                        
+                        setTimeout(() => {
+                            this.finalPassForMissedElements(isDark);
+                        }, 800);
+                        
                         setTimeout(() => {
                             this.finalPassForMissedElements(isDark);
                             this.themeChangeInProgress = false;
-                        }, 300);
+                        }, 1500);
                     });
                 });
             }
@@ -602,18 +714,17 @@
                 '[data-hook*="price"]',
                 '[class*="breadcrumb"]',
                 '[class*="product-title"]',
-                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a'
+                'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'span', 'a', 'div', 'section'
             ];
             
             missedSelectors.forEach(selector => {
                 try {
                     const elements = document.querySelectorAll(selector);
                     elements.forEach(el => {
-                        if (!this.processedElements.has(el)) {
-                            this.storeOriginalColorsForElement(el);
-                            this.processElement(el, isDark);
-                            this.processedElements.add(el);
-                        }
+                        // Always reprocess to ensure colors stick
+                        this.storeOriginalColorsForElement(el);
+                        this.processElement(el, isDark);
+                        this.processedElements.add(el);
                     });
                 } catch (e) {
                     // Invalid selector, skip
@@ -728,38 +839,38 @@
                 }
 
                 const newBorderTop = this.convertColor(original.borderTopColor, toDark);
-                if (newBorderTop) element.style.borderTopColor = newBorderTop;
+                if (newBorderTop) element.style.setProperty('border-top-color', newBorderTop, 'important');
 
                 const newBorderRight = this.convertColor(original.borderRightColor, toDark);
-                if (newBorderRight) element.style.borderRightColor = newBorderRight;
+                if (newBorderRight) element.style.setProperty('border-right-color', newBorderRight, 'important');
 
                 const newBorderBottom = this.convertColor(original.borderBottomColor, toDark);
-                if (newBorderBottom) element.style.borderBottomColor = newBorderBottom;
+                if (newBorderBottom) element.style.setProperty('border-bottom-color', newBorderBottom, 'important');
 
                 const newBorderLeft = this.convertColor(original.borderLeftColor, toDark);
-                if (newBorderLeft) element.style.borderLeftColor = newBorderLeft;
+                if (newBorderLeft) element.style.setProperty('border-left-color', newBorderLeft, 'important');
 
                 if (original.fill && original.fill !== 'none') {
                     const newFill = this.convertColor(original.fill, toDark);
-                    if (newFill) element.style.fill = newFill;
+                    if (newFill) element.style.setProperty('fill', newFill, 'important');
                 }
 
                 if (original.stroke && original.stroke !== 'none') {
                     const newStroke = this.convertColor(original.stroke, toDark);
-                    if (newStroke) element.style.stroke = newStroke;
+                    if (newStroke) element.style.setProperty('stroke', newStroke, 'important');
                 }
 
                 if (original.backgroundImage && original.backgroundImage !== 'none' && original.backgroundImage.includes('gradient')) {
                     const newGradient = this.convertGradient(original.backgroundImage, toDark);
                     if (newGradient) {
-                        element.style.backgroundImage = newGradient;
+                        element.style.setProperty('background-image', newGradient, 'important');
                     }
                 }
 
                 if (original.webkitTextFillColor === 'transparent' && original.backgroundImage && original.backgroundImage.includes('gradient')) {
                     const newGradient = this.convertGradient(original.backgroundImage, toDark);
                     if (newGradient) {
-                        element.style.backgroundImage = newGradient;
+                        element.style.setProperty('background-image', newGradient, 'important');
                         element.style.webkitBackgroundClip = 'text';
                         element.style.backgroundClip = 'text';
                     }
@@ -886,6 +997,7 @@
                 this.observer.disconnect();
             }
             clearTimeout(this.pendingTimeout);
+            clearTimeout(this.reapplyTimer);
         }
     }
 
