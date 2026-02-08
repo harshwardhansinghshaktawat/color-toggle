@@ -7,6 +7,78 @@
     console.log('📄 Document Ready State:', document.readyState);
     
 
+    // ==========================================
+    // CRITICAL FIX: Apply theme IMMEDIATELY on page load
+    // This prevents color flashing during navigation
+    // ==========================================
+    (function immediateThemeApplication() {
+        console.log('⚡ ========== IMMEDIATE THEME APPLICATION STARTING ==========');
+        try {
+            const savedTheme = localStorage.getItem('themePreference');
+            console.log('💾 Saved theme from localStorage:', savedTheme);
+            
+            if (!savedTheme || savedTheme === 'light') {
+                console.log('✅ Default theme (light) - no pre-application needed');
+                return; // Default theme, no action needed
+            }
+
+            // Get saved settings from localStorage
+            const savedSettings = localStorage.getItem('themeSwitcherSettings');
+            console.log('📋 Saved settings from localStorage:', savedSettings);
+            
+            if (!savedSettings) {
+                console.log('⚠️ No saved settings found - cannot pre-apply theme');
+                return;
+            }
+
+            const settings = JSON.parse(savedSettings);
+            const isDark = savedTheme === 'dark';
+            const colors = isDark ? settings.darkColors : settings.lightColors;
+
+            if (!colors || colors.length < 5) {
+                console.log('⚠️ Invalid colors array - cannot pre-apply theme');
+                return;
+            }
+
+            console.log('🎨 Pre-applying colors:', colors);
+
+            // Apply theme IMMEDIATELY to prevent flash
+            const style = document.createElement('style');
+            style.id = 'theme-preload-styles';
+            style.textContent = `
+                html, body {
+                    background-color: ${colors[0]} !important;
+                    color: ${colors[4]} !important;
+                    transition: none !important;
+                }
+                * {
+                    transition: none !important;
+                }
+            `;
+            
+            // Insert at the very beginning of head
+            if (document.head) {
+                document.head.insertBefore(style, document.head.firstChild);
+                console.log('✅ Pre-load styles inserted into <head>');
+            } else {
+                console.log('⏳ <head> not ready, setting up observer...');
+                // If head doesn't exist yet, wait for it
+                const observer = new MutationObserver(() => {
+                    if (document.head) {
+                        document.head.insertBefore(style, document.head.firstChild);
+                        console.log('✅ Pre-load styles inserted into <head> (via observer)');
+                        observer.disconnect();
+                    }
+                });
+                observer.observe(document.documentElement, { childList: true });
+            }
+
+            console.log('⚡ ========== IMMEDIATE THEME PRE-APPLIED:', savedTheme, '==========');
+        } catch (e) {
+            console.error('❌ Could not pre-apply theme:', e);
+        }
+    })();
+
     // Check if already defined to prevent duplicate registration
 
     if (customElements.get('theme-switcher')) {
@@ -281,6 +353,15 @@
 
                     Object.assign(this.settings, newSettings);
 
+                    
+                    // CRITICAL: Save settings to localStorage for immediate application on next page
+                    try {
+                        localStorage.setItem('themeSwitcherSettings', JSON.stringify(this.settings));
+                        console.log('💾 Settings saved to localStorage for pre-application');
+                    } catch (storageError) {
+                        console.warn('⚠️ Could not save settings to localStorage:', storageError);
+                    }
+                    
                     console.log('✅ Settings updated successfully');
 
                     console.log('📋 Current settings:', this.settings);
@@ -1021,19 +1102,23 @@
 
             if (!isDefaultTheme) {
 
-                console.log('⚡ NON-DEFAULT THEME - Will apply theme on load');
+                console.log('⚡ NON-DEFAULT THEME - Will apply theme IMMEDIATELY (no delay)');
 
-                console.log('⏰ Setting 500ms delay before applying theme...');
-
-                // Delay theme application to ensure all elements are loaded
-
+                
+                // Apply theme IMMEDIATELY without any delay
+                this.changeTheme();
+                
+                // Remove pre-load styles after theme is applied
                 setTimeout(() => {
-
-                    console.log('⏰ 500ms delay complete, applying theme now...');
-
-                    this.changeTheme();
-
-                }, 500);
+                    const preloadStyles = document.getElementById('theme-preload-styles');
+                    if (preloadStyles) {
+                        preloadStyles.remove();
+                        console.log('🗑️ Pre-load styles removed');
+                    }
+                    // Re-enable transitions
+                    document.body.style.transition = 'all 0.3s ease';
+                    console.log('✅ Transitions re-enabled');
+                }, 100);
 
             } else {
 
