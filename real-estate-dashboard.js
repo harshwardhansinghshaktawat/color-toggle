@@ -819,12 +819,15 @@ class RealEstateDashboard extends HTMLElement {
         if (isEdit && listing) {
             this._formData = { ...listing };
             // Store ORIGINAL Wix URLs for preservation
-            this._originalThumbnailUrl = listing.thumbnailImage;  // Keep wix:image:// format
-            this._originalGalleryImages = listing.galleryImages;  // Keep wix:image:// format
+            this._originalThumbnailUrl = listing.thumbnailImage;
+            this._originalGalleryImages = listing.galleryImages;
             // Ensure relatedProperties is an array
             if (!this._formData.relatedProperties) {
                 this._formData.relatedProperties = [];
             }
+            
+            // Dispatch event to populate native elements
+            this._dispatchEvent('edit-listing', { listing });
         } else {
             this._formData = {
                 title: '',
@@ -839,22 +842,20 @@ class RealEstateDashboard extends HTMLElement {
             };
             this._originalThumbnailUrl = null;
             this._originalGalleryImages = [];
+            
+            // Dispatch event to clear native elements
+            this._dispatchEvent('new-listing', {});
         }
         
         // Update modal title
         this._shadow.getElementById('modalTitle').textContent = 
             isEdit ? 'Edit Listing - ' + listing.title : 'Add New Listing';
         
-        // Render form
+        // Render form (WITHOUT address and related properties sections)
         this._renderForm();
         
         // Show modal
         this._shadow.getElementById('modal').classList.add('active');
-        
-        // Load related listings options AFTER modal is shown and form is rendered
-        setTimeout(() => {
-            this._loadRelatedListingsOptions();
-        }, 100);
     }
     
     _renderForm() {
@@ -1699,6 +1700,9 @@ class RealEstateDashboard extends HTMLElement {
         // Hide progress
         const progressSection = this._shadow.getElementById('progressSection');
         progressSection.classList.remove('active');
+        
+        // Dispatch event to hide native elements
+        this._dispatchEvent('close-form', {});
     }
     
     _updateStats() {
