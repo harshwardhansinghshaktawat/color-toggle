@@ -11,12 +11,8 @@ class RealEstateDashboard extends HTMLElement {
         this._editMode = false;
         this._thumbnailFile = null;
         this._galleryFiles = [];
-        this._seoOgImageFile = null;
         this._formData = {};
         this._root = document.createElement('div');
-        this._deleteThumbnail = false;
-        this._deleteGallery = false;
-        this._deleteSeoOgImage = false;
         
         this._createStructure();
         this._setupEventListeners();
@@ -425,7 +421,6 @@ class RealEstateDashboard extends HTMLElement {
                 .file-preview {
                     margin-top: 16px;
                     display: none;
-                    position: relative;
                 }
                 
                 .file-preview.active { display: block; }
@@ -436,27 +431,6 @@ class RealEstateDashboard extends HTMLElement {
                     object-fit: cover;
                     border-radius: 12px;
                     border: 2px solid #e5e7eb;
-                }
-                
-                .image-delete-btn {
-                    position: absolute;
-                    top: 8px;
-                    right: 8px;
-                    background: rgba(239, 68, 68, 0.9);
-                    color: white;
-                    border: none;
-                    padding: 8px 12px;
-                    border-radius: 6px;
-                    cursor: pointer;
-                    font-size: 12px;
-                    font-weight: 600;
-                    display: flex;
-                    align-items: center;
-                    gap: 4px;
-                }
-                
-                .image-delete-btn:hover {
-                    background: rgba(239, 68, 68, 1);
                 }
                 
                 .gallery-preview {
@@ -804,18 +778,12 @@ class RealEstateDashboard extends HTMLElement {
             // Convert Wix image URL to WixStatic URL
             const imageUrl = this._convertWixImageUrl(listing.thumbnailImage);
             
-            // Format location from lat/lng object
-            const locationText = listing.location?.description || 
-                                (listing.location?.latitude && listing.location?.longitude ? 
-                                 `${listing.location.latitude}, ${listing.location.longitude}` : 
-                                 'Location not specified');
-            
             card.innerHTML = `
                 <img src="${imageUrl}" alt="${listing.title}" class="card-img">
                 <div class="card-body">
                     <div class="card-badges">${badges.join('')}</div>
                     <div class="card-title">${listing.title}</div>
-                    <div class="card-location">📍 ${locationText}</div>
+                    <div class="card-location">📍 ${listing.location || 'Location not specified'}</div>
                     <div class="card-price">${listing.currency || '$'}${this._formatNumber(listing.price || listing.monthlyRent || 0)}</div>
                     <div class="card-features">
                         ${listing.bedrooms ? `<div class="feature">🛏️ ${listing.bedrooms}</div>` : ''}
@@ -846,14 +814,13 @@ class RealEstateDashboard extends HTMLElement {
         this._editMode = isEdit;
         this._thumbnailFile = null;
         this._galleryFiles = [];
-        this._seoOgImageFile = null;
-        this._deleteThumbnail = false;
-        this._deleteGallery = false;
-        this._deleteSeoOgImage = false;
         
         // Initialize form data
         if (isEdit && listing) {
             this._formData = { ...listing };
+            // Store ORIGINAL Wix URLs for preservation
+            this._originalThumbnailUrl = listing.thumbnailImage;  // Keep wix:image:// format
+            this._originalGalleryImages = listing.galleryImages;  // Keep wix:image:// format
             // Ensure relatedProperties is an array
             if (!this._formData.relatedProperties) {
                 this._formData.relatedProperties = [];
@@ -861,7 +828,7 @@ class RealEstateDashboard extends HTMLElement {
         } else {
             this._formData = {
                 title: '',
-                location: { latitude: '', longitude: '', description: '' },
+                location: '',
                 propertyType: '',
                 listingType: 'sale',
                 price: '',
@@ -870,6 +837,8 @@ class RealEstateDashboard extends HTMLElement {
                 squareFootage: '',
                 relatedProperties: []
             };
+            this._originalThumbnailUrl = null;
+            this._originalGalleryImages = [];
         }
         
         // Update modal title
@@ -890,12 +859,6 @@ class RealEstateDashboard extends HTMLElement {
     
     _renderForm() {
         const formBody = this._shadow.getElementById('formBody');
-        
-        // Parse location object
-        const locationObj = this._formData.location || {};
-        const latitude = locationObj.latitude || '';
-        const longitude = locationObj.longitude || '';
-        const locationDesc = locationObj.description || '';
         
         formBody.innerHTML = `
             <!-- Basic Information -->
@@ -918,17 +881,13 @@ class RealEstateDashboard extends HTMLElement {
                     <textarea class="textarea" id="description" rows="6" placeholder="Describe the property in detail...">${this._formData.description || ''}</textarea>
                 </div>
                 
-                <div class="form-group">
-                    <label class="label required">Location (Latitude & Longitude)</label>
-                    <div class="form-row">
-                        <input type="number" step="any" class="input" id="latitude" value="${latitude}" placeholder="Latitude (e.g., 37.77065)">
-                        <input type="number" step="any" class="input" id="longitude" value="${longitude}" placeholder="Longitude (e.g., -122.387301)">
-                    </div>
-                    <input type="text" class="input" id="locationDescription" value="${locationDesc}" placeholder="Location description (e.g., Wix Office)" style="margin-top: 12px;">
-                    <div class="help-text">Get latitude and longitude from <a href="https://www.google.com/maps" target="_blank" style="color: #8b5cf6; text-decoration: underline;">Google Maps</a> (right-click on location → click coordinates to copy)</div>
-                </div>
-                
                 <div class="form-row">
+                    <div class="form-group">
+                        <label class="label required">Full Address</label>
+                        <input type="text" class="input" id="location" value="${this._formData.location || ''}" placeholder="123 Main St, City, State ZIP, Country">
+                        <div class="help-text">Enter complete address for Google Maps compatibility (Street, City, State/Province, ZIP/Postal Code, Country)</div>
+                    </div>
+                    
                     <div class="form-group">
                         <label class="label required">Property Type</label>
                         <select class="select" id="propertyType">
@@ -941,7 +900,9 @@ class RealEstateDashboard extends HTMLElement {
                             <option value="commercial" ${this._formData.propertyType === 'commercial' ? 'selected' : ''}>Commercial</option>
                         </select>
                     </div>
-                    
+                </div>
+                
+                <div class="form-row">
                     <div class="form-group">
                         <label class="label required">Listing Type</label>
                         <select class="select" id="listingType">
@@ -949,9 +910,7 @@ class RealEstateDashboard extends HTMLElement {
                             <option value="rent" ${this._formData.listingType === 'rent' ? 'selected' : ''}>For Rent</option>
                         </select>
                     </div>
-                </div>
-                
-                <div class="form-row">
+                    
                     <div class="form-group">
                         <label class="label">Condition</label>
                         <select class="select" id="condition">
@@ -963,7 +922,6 @@ class RealEstateDashboard extends HTMLElement {
                             <option value="needswork" ${this._formData.condition === 'needswork' ? 'selected' : ''}>Needs Work</option>
                         </select>
                     </div>
-                    <div></div>
                 </div>
             </div>
             
@@ -981,11 +939,8 @@ class RealEstateDashboard extends HTMLElement {
                             <div style="font-size: 12px; color: #6b7280;">Recommended: 1200x800px</div>
                         </div>
                     </label>
-                    <div class="file-preview ${this._formData.thumbnailImage && !this._deleteThumbnail ? 'active' : ''}" id="thumbnailPreview">
-                        ${this._formData.thumbnailImage && !this._deleteThumbnail ? `
-                            <img src="${this._convertWixImageUrl(this._formData.thumbnailImage)}" class="preview-img">
-                            <button type="button" class="image-delete-btn" id="deleteThumbnailBtn">🗑️ Remove</button>
-                        ` : ''}
+                    <div class="file-preview ${this._formData.thumbnailImage ? 'active' : ''}" id="thumbnailPreview">
+                        ${this._formData.thumbnailImage ? `<img src="${this._convertWixImageUrl(this._formData.thumbnailImage)}" class="preview-img">` : ''}
                     </div>
                 </div>
                 
@@ -999,13 +954,18 @@ class RealEstateDashboard extends HTMLElement {
                             <div style="font-size: 12px; color: #6b7280;">You can select multiple images</div>
                         </div>
                     </label>
-                    ${this._formData.galleryImages && this._formData.galleryImages.length > 0 && !this._deleteGallery ? `
-                        <div style="margin-top: 16px; padding: 12px; background: #fef3c7; border-radius: 8px; display: flex; justify-content: space-between; align-items: center;">
-                            <span style="font-size: 13px; color: #92400e;">✅ ${this._formData.galleryImages.length} existing images</span>
-                            <button type="button" class="btn btn-danger" id="deleteGalleryBtn" style="padding: 6px 12px; font-size: 12px;">🗑️ Delete All</button>
-                        </div>
-                    ` : ''}
-                    <div class="gallery-preview" id="galleryPreview"></div>
+                    <div class="gallery-preview" id="galleryPreview">
+                        ${this._formData.galleryImages && this._formData.galleryImages.length > 0 ? 
+                            this._formData.galleryImages.map((img, idx) => {
+                                const imgUrl = typeof img === 'string' ? img : img.src;
+                                return `
+                                    <div class="gallery-item">
+                                        <img src="${this._convertWixImageUrl(imgUrl)}">
+                                    </div>
+                                `;
+                            }).join('') : ''
+                        }
+                    </div>
                 </div>
             </div>
             
@@ -1421,21 +1381,9 @@ class RealEstateDashboard extends HTMLElement {
                 </div>
                 
                 <div class="form-group">
-                    <label class="label">SEO Open Graph Image</label>
-                    <input type="file" class="file-input" id="seoOgImageInput" accept="image/*">
-                    <label for="seoOgImageInput" class="file-label">
-                        <span style="font-size: 32px;">🖼️</span>
-                        <div>
-                            <div style="font-weight: 600;">Click to upload OG image</div>
-                            <div style="font-size: 12px; color: #6b7280;">For social media sharing (1200x630px recommended)</div>
-                        </div>
-                    </label>
-                    <div class="file-preview ${this._formData.seoOgImage && !this._deleteSeoOgImage ? 'active' : ''}" id="seoOgImagePreview">
-                        ${this._formData.seoOgImage && !this._deleteSeoOgImage ? `
-                            <img src="${this._convertWixImageUrl(this._formData.seoOgImage)}" class="preview-img">
-                            <button type="button" class="image-delete-btn" id="deleteSeoOgImageBtn">🗑️ Remove</button>
-                        ` : ''}
-                    </div>
+                    <label class="label">SEO Open Graph Image URL</label>
+                    <input type="url" class="input" id="seoOgImage" value="${this._formData.seoOgImage || ''}" placeholder="https://example.com/image.jpg">
+                    <div class="help-text">Image URL for social media sharing (Facebook, Twitter, LinkedIn)</div>
                 </div>
             </div>
         `;
@@ -1447,7 +1395,7 @@ class RealEstateDashboard extends HTMLElement {
         setTimeout(() => {
             const currencySelect = this._shadow.getElementById('currency');
             if (currencySelect) {
-                currencySelect.value = this._formData.currency || 'USD';
+                currencySelect.value = this._formData.currency || '$';
             }
         }, 0);
     }
@@ -1468,46 +1416,20 @@ class RealEstateDashboard extends HTMLElement {
             const file = e.target.files[0];
             if (file) {
                 this._thumbnailFile = file;
-                this._deleteThumbnail = false;
                 const reader = new FileReader();
                 reader.onload = (event) => {
                     const preview = this._shadow.getElementById('thumbnailPreview');
-                    preview.innerHTML = `
-                        <img src="${event.target.result}" class="preview-img">
-                        <button type="button" class="image-delete-btn" id="deleteThumbnailBtn">🗑️ Remove</button>
-                    `;
+                    preview.innerHTML = `<img src="${event.target.result}" class="preview-img">`;
                     preview.classList.add('active');
-                    
-                    // Attach delete listener
-                    this._shadow.getElementById('deleteThumbnailBtn').addEventListener('click', () => {
-                        this._thumbnailFile = null;
-                        this._deleteThumbnail = true;
-                        preview.classList.remove('active');
-                        preview.innerHTML = '';
-                        this._shadow.getElementById('thumbnailInput').value = '';
-                    });
                 };
                 reader.readAsDataURL(file);
             }
         });
         
-        // Delete existing thumbnail
-        const deleteThumbnailBtn = this._shadow.getElementById('deleteThumbnailBtn');
-        if (deleteThumbnailBtn) {
-            deleteThumbnailBtn.addEventListener('click', () => {
-                this._thumbnailFile = null;
-                this._deleteThumbnail = true;
-                const preview = this._shadow.getElementById('thumbnailPreview');
-                preview.classList.remove('active');
-                preview.innerHTML = '';
-            });
-        }
-        
         // Gallery upload
         this._shadow.getElementById('galleryInput').addEventListener('change', (e) => {
             const files = Array.from(e.target.files);
             this._galleryFiles = files;
-            this._deleteGallery = false;
             
             const preview = this._shadow.getElementById('galleryPreview');
             preview.innerHTML = '';
@@ -1524,7 +1446,7 @@ class RealEstateDashboard extends HTMLElement {
                     
                     item.querySelector('.gallery-remove').addEventListener('click', () => {
                         this._galleryFiles.splice(index, 1);
-                        item.remove();
+                        this._shadow.getElementById('galleryInput').dispatchEvent(new Event('change'));
                     });
                     
                     preview.appendChild(item);
@@ -1532,56 +1454,6 @@ class RealEstateDashboard extends HTMLElement {
                 reader.readAsDataURL(file);
             });
         });
-        
-        // Delete all gallery images
-        const deleteGalleryBtn = this._shadow.getElementById('deleteGalleryBtn');
-        if (deleteGalleryBtn) {
-            deleteGalleryBtn.addEventListener('click', () => {
-                this._galleryFiles = [];
-                this._deleteGallery = true;
-                deleteGalleryBtn.parentElement.remove();
-            });
-        }
-        
-        // SEO OG Image upload
-        this._shadow.getElementById('seoOgImageInput').addEventListener('change', (e) => {
-            const file = e.target.files[0];
-            if (file) {
-                this._seoOgImageFile = file;
-                this._deleteSeoOgImage = false;
-                const reader = new FileReader();
-                reader.onload = (event) => {
-                    const preview = this._shadow.getElementById('seoOgImagePreview');
-                    preview.innerHTML = `
-                        <img src="${event.target.result}" class="preview-img">
-                        <button type="button" class="image-delete-btn" id="deleteSeoOgImageBtn">🗑️ Remove</button>
-                    `;
-                    preview.classList.add('active');
-                    
-                    // Attach delete listener
-                    this._shadow.getElementById('deleteSeoOgImageBtn').addEventListener('click', () => {
-                        this._seoOgImageFile = null;
-                        this._deleteSeoOgImage = true;
-                        preview.classList.remove('active');
-                        preview.innerHTML = '';
-                        this._shadow.getElementById('seoOgImageInput').value = '';
-                    });
-                };
-                reader.readAsDataURL(file);
-            }
-        });
-        
-        // Delete existing SEO OG Image
-        const deleteSeoOgImageBtn = this._shadow.getElementById('deleteSeoOgImageBtn');
-        if (deleteSeoOgImageBtn) {
-            deleteSeoOgImageBtn.addEventListener('click', () => {
-                this._seoOgImageFile = null;
-                this._deleteSeoOgImage = true;
-                const preview = this._shadow.getElementById('seoOgImagePreview');
-                preview.classList.remove('active');
-                preview.innerHTML = '';
-            });
-        }
     }
     
     _generateSlug(title) {
@@ -1591,28 +1463,17 @@ class RealEstateDashboard extends HTMLElement {
             .replace(/\s+/g, '-')
             .replace(/-+/g, '-')
             .substring(0, 100)
-            .replace(/^-+|-+$/g, '');
+            .replace(/^-+|-+$/g, '');  // Remove leading and trailing hyphens AFTER substring
     }
     
     _collectFormData() {
         const formBody = this._shadow.getElementById('formBody');
         
-        // Collect location object
-        const latitude = formBody.querySelector('#latitude')?.value.trim();
-        const longitude = formBody.querySelector('#longitude')?.value.trim();
-        const locationDescription = formBody.querySelector('#locationDescription')?.value.trim();
-        
-        const locationObj = {
-            latitude: latitude ? parseFloat(latitude) : null,
-            longitude: longitude ? parseFloat(longitude) : null,
-            description: locationDescription || ''
-        };
-        
         const data = {
             title: formBody.querySelector('#title')?.value.trim() || '',
             slug: formBody.querySelector('#slug')?.value.trim() || '',
             description: formBody.querySelector('#description')?.value.trim() || '',
-            location: locationObj,
+            location: formBody.querySelector('#location')?.value.trim() || '',
             propertyType: formBody.querySelector('#propertyType')?.value || '',
             listingType: formBody.querySelector('#listingType')?.value || 'sale',
             condition: formBody.querySelector('#condition')?.value || '',
@@ -1624,7 +1485,7 @@ class RealEstateDashboard extends HTMLElement {
             totalRooms: formBody.querySelector('#totalRooms')?.value || null,
             garageSpaces: formBody.querySelector('#garageSpaces')?.value || null,
             price: formBody.querySelector('#price')?.value || null,
-            currency: formBody.querySelector('#currency')?.value || 'USD',
+            currency: formBody.querySelector('#currency')?.value || '$',
             hoaFee: formBody.querySelector('#hoaFee')?.value || null,
             propertyTax: formBody.querySelector('#propertyTax')?.value || null,
             priceValidUntil: formBody.querySelector('#priceValidUntil')?.value || null,
@@ -1699,9 +1560,7 @@ class RealEstateDashboard extends HTMLElement {
             seoTitle: formBody.querySelector('#seoTitle')?.value.trim() || '',
             seoDescription: formBody.querySelector('#seoDescription')?.value.trim() || '',
             seoKeywords: formBody.querySelector('#seoKeywords')?.value.trim() || '',
-            
-            // Related properties
-            relatedProperties: this._formData.relatedProperties || []
+            seoOgImage: formBody.querySelector('#seoOgImage')?.value.trim() || ''
         };
         
         return data;
@@ -1718,8 +1577,8 @@ class RealEstateDashboard extends HTMLElement {
             return;
         }
         
-        if (!data.location.latitude || !data.location.longitude) {
-            alert('❌ Please enter both latitude and longitude');
+        if (!data.location) {
+            alert('❌ Please enter a location');
             return;
         }
         
@@ -1738,11 +1597,6 @@ class RealEstateDashboard extends HTMLElement {
             return;
         }
         
-        if (this._editMode && this._deleteThumbnail && !this._thumbnailFile) {
-            alert('❌ Cannot delete thumbnail without uploading a new one');
-            return;
-        }
-        
         // Disable save button
         const saveBtn = this._shadow.getElementById('saveBtn');
         saveBtn.disabled = true;
@@ -1756,11 +1610,7 @@ class RealEstateDashboard extends HTMLElement {
             // Prepare images for upload
             const imageData = {
                 thumbnail: null,
-                gallery: [],
-                seoOgImage: null,
-                deleteThumbnail: this._deleteThumbnail,
-                deleteGallery: this._deleteGallery,
-                deleteSeoOgImage: this._deleteSeoOgImage
+                gallery: []
             };
             
             // Convert thumbnail to base64
@@ -1775,17 +1625,13 @@ class RealEstateDashboard extends HTMLElement {
                 );
             }
             
-            // Convert SEO OG Image to base64
-            if (this._seoOgImageFile) {
-                imageData.seoOgImage = await this._fileToBase64(this._seoOgImageFile);
-            }
-            
             console.log('🏠 Dashboard: Dispatching save event');
-            console.log('🏠 Dashboard: Related properties:', data.relatedProperties);
             
             this._dispatchEvent('save-listing', {
                 listingData: data,
                 imageData: imageData,
+                originalThumbnailUrl: this._originalThumbnailUrl,  // Preserve wix:image:// format
+                originalGalleryImages: this._originalGalleryImages,  // Preserve wix:image:// format
                 existingListing: this._editMode ? this._selectedListing : null
             });
             
@@ -1843,10 +1689,6 @@ class RealEstateDashboard extends HTMLElement {
         this._editMode = false;
         this._thumbnailFile = null;
         this._galleryFiles = [];
-        this._seoOgImageFile = null;
-        this._deleteThumbnail = false;
-        this._deleteGallery = false;
-        this._deleteSeoOgImage = false;
         this._formData = {};
         
         // Reset save button
@@ -1862,7 +1704,8 @@ class RealEstateDashboard extends HTMLElement {
     _updateStats() {
         this._shadow.getElementById('totalListings').textContent = this._totalListings;
         
-        // Dispatch event to get counts from backend
+        // Count from ALL listings (not just current page)
+        // We need to dispatch an event to get counts from backend
         this._dispatchEvent('get-listing-counts', {});
     }
     
@@ -1886,11 +1729,14 @@ class RealEstateDashboard extends HTMLElement {
     _convertWixImageUrl(url) {
         if (!url) return 'https://via.placeholder.com/400x300';
         
+        // If already a full URL, return as is
         if (url.startsWith('http://') || url.startsWith('https://')) {
             return url;
         }
         
+        // Convert wix:image:// format to WixStatic URL
         if (url.startsWith('wix:image://')) {
+            // Extract the image ID from wix:image://v1/{imageId}/{filename}
             const match = url.match(/wix:image:\/\/v1\/([^\/]+)\//);
             if (match && match[1]) {
                 const imageId = match[1];
@@ -1911,11 +1757,152 @@ class RealEstateDashboard extends HTMLElement {
             { code: 'CAD', symbol: 'C$', name: 'Canadian Dollar' },
             { code: 'CHF', symbol: 'CHF', name: 'Swiss Franc' },
             { code: 'CNY', symbol: '¥', name: 'Chinese Yuan' },
-            { code: 'INR', symbol: '₹', name: 'Indian Rupee' }
+            { code: 'SEK', symbol: 'kr', name: 'Swedish Krona' },
+            { code: 'NZD', symbol: 'NZ$', name: 'New Zealand Dollar' },
+            { code: 'MXN', symbol: 'MX$', name: 'Mexican Peso' },
+            { code: 'SGD', symbol: 'S$', name: 'Singapore Dollar' },
+            { code: 'HKD', symbol: 'HK$', name: 'Hong Kong Dollar' },
+            { code: 'NOK', symbol: 'kr', name: 'Norwegian Krone' },
+            { code: 'KRW', symbol: '₩', name: 'South Korean Won' },
+            { code: 'TRY', symbol: '₺', name: 'Turkish Lira' },
+            { code: 'RUB', symbol: '₽', name: 'Russian Ruble' },
+            { code: 'INR', symbol: '₹', name: 'Indian Rupee' },
+            { code: 'BRL', symbol: 'R$', name: 'Brazilian Real' },
+            { code: 'ZAR', symbol: 'R', name: 'South African Rand' },
+            { code: 'DKK', symbol: 'kr', name: 'Danish Krone' },
+            { code: 'PLN', symbol: 'zł', name: 'Polish Zloty' },
+            { code: 'TWD', symbol: 'NT$', name: 'Taiwan Dollar' },
+            { code: 'THB', symbol: '฿', name: 'Thai Baht' },
+            { code: 'MYR', symbol: 'RM', name: 'Malaysian Ringgit' },
+            { code: 'IDR', symbol: 'Rp', name: 'Indonesian Rupiah' },
+            { code: 'HUF', symbol: 'Ft', name: 'Hungarian Forint' },
+            { code: 'CZK', symbol: 'Kč', name: 'Czech Koruna' },
+            { code: 'ILS', symbol: '₪', name: 'Israeli Shekel' },
+            { code: 'CLP', symbol: 'CL$', name: 'Chilean Peso' },
+            { code: 'PHP', symbol: '₱', name: 'Philippine Peso' },
+            { code: 'AED', symbol: 'د.إ', name: 'UAE Dirham' },
+            { code: 'COP', symbol: 'COL$', name: 'Colombian Peso' },
+            { code: 'SAR', symbol: 'SR', name: 'Saudi Riyal' },
+            { code: 'RON', symbol: 'lei', name: 'Romanian Leu' },
+            { code: 'VND', symbol: '₫', name: 'Vietnamese Dong' },
+            { code: 'ARS', symbol: 'AR$', name: 'Argentine Peso' },
+            { code: 'UAH', symbol: '₴', name: 'Ukrainian Hryvnia' },
+            { code: 'QAR', symbol: 'QR', name: 'Qatari Riyal' },
+            { code: 'KWD', symbol: 'KD', name: 'Kuwaiti Dinar' },
+            { code: 'OMR', symbol: 'OMR', name: 'Omani Rial' },
+            { code: 'BHD', symbol: 'BD', name: 'Bahraini Dinar' },
+            { code: 'JOD', symbol: 'JD', name: 'Jordanian Dinar' },
+            { code: 'EGP', symbol: 'E£', name: 'Egyptian Pound' },
+            { code: 'MAD', symbol: 'MAD', name: 'Moroccan Dirham' },
+            { code: 'PKR', symbol: 'Rs', name: 'Pakistani Rupee' },
+            { code: 'BDT', symbol: '৳', name: 'Bangladeshi Taka' },
+            { code: 'LKR', symbol: 'Rs', name: 'Sri Lankan Rupee' },
+            { code: 'KES', symbol: 'KSh', name: 'Kenyan Shilling' },
+            { code: 'NGN', symbol: '₦', name: 'Nigerian Naira' },
+            { code: 'GHS', symbol: 'GH₵', name: 'Ghanaian Cedi' },
+            { code: 'UGX', symbol: 'USh', name: 'Ugandan Shilling' },
+            { code: 'TZS', symbol: 'TSh', name: 'Tanzanian Shilling' },
+            { code: 'ETB', symbol: 'Br', name: 'Ethiopian Birr' },
+            { code: 'PEN', symbol: 'S/', name: 'Peruvian Sol' },
+            { code: 'VEF', symbol: 'Bs', name: 'Venezuelan Bolívar' },
+            { code: 'BOB', symbol: 'Bs', name: 'Bolivian Boliviano' },
+            { code: 'PYG', symbol: '₲', name: 'Paraguayan Guaraní' },
+            { code: 'UYU', symbol: '$U', name: 'Uruguayan Peso' },
+            { code: 'CRC', symbol: '₡', name: 'Costa Rican Colón' },
+            { code: 'GTQ', symbol: 'Q', name: 'Guatemalan Quetzal' },
+            { code: 'HNL', symbol: 'L', name: 'Honduran Lempira' },
+            { code: 'NIO', symbol: 'C$', name: 'Nicaraguan Córdoba' },
+            { code: 'PAB', symbol: 'B/.', name: 'Panamanian Balboa' },
+            { code: 'DOP', symbol: 'RD$', name: 'Dominican Peso' },
+            { code: 'JMD', symbol: 'J$', name: 'Jamaican Dollar' },
+            { code: 'TTD', symbol: 'TT$', name: 'Trinidad and Tobago Dollar' },
+            { code: 'BBD', symbol: 'Bds$', name: 'Barbadian Dollar' },
+            { code: 'BSD', symbol: 'B$', name: 'Bahamian Dollar' },
+            { code: 'BZD', symbol: 'BZ$', name: 'Belize Dollar' },
+            { code: 'XCD', symbol: 'EC$', name: 'East Caribbean Dollar' },
+            { code: 'ISK', symbol: 'kr', name: 'Icelandic Króna' },
+            { code: 'BGN', symbol: 'лв', name: 'Bulgarian Lev' },
+            { code: 'HRK', symbol: 'kn', name: 'Croatian Kuna' },
+            { code: 'RSD', symbol: 'din', name: 'Serbian Dinar' },
+            { code: 'MKD', symbol: 'ден', name: 'Macedonian Denar' },
+            { code: 'BAM', symbol: 'KM', name: 'Bosnia-Herzegovina Convertible Mark' },
+            { code: 'ALL', symbol: 'L', name: 'Albanian Lek' },
+            { code: 'MDL', symbol: 'L', name: 'Moldovan Leu' },
+            { code: 'GEL', symbol: '₾', name: 'Georgian Lari' },
+            { code: 'AMD', symbol: '֏', name: 'Armenian Dram' },
+            { code: 'AZN', symbol: '₼', name: 'Azerbaijani Manat' },
+            { code: 'KZT', symbol: '₸', name: 'Kazakhstani Tenge' },
+            { code: 'UZS', symbol: 'soʻm', name: 'Uzbekistani Som' },
+            { code: 'KGS', symbol: 'с', name: 'Kyrgyzstani Som' },
+            { code: 'TJS', symbol: 'ЅМ', name: 'Tajikistani Somoni' },
+            { code: 'TMT', symbol: 'm', name: 'Turkmenistan Manat' },
+            { code: 'AFN', symbol: '؋', name: 'Afghan Afghani' },
+            { code: 'IQD', symbol: 'ID', name: 'Iraqi Dinar' },
+            { code: 'LBP', symbol: 'LL', name: 'Lebanese Pound' },
+            { code: 'SYP', symbol: 'LS', name: 'Syrian Pound' },
+            { code: 'YER', symbol: 'YR', name: 'Yemeni Rial' },
+            { code: 'MNT', symbol: '₮', name: 'Mongolian Tögrög' },
+            { code: 'MMK', symbol: 'K', name: 'Myanmar Kyat' },
+            { code: 'KHR', symbol: '៛', name: 'Cambodian Riel' },
+            { code: 'LAK', symbol: '₭', name: 'Lao Kip' },
+            { code: 'NPR', symbol: 'Rs', name: 'Nepalese Rupee' },
+            { code: 'BTN', symbol: 'Nu', name: 'Bhutanese Ngultrum' },
+            { code: 'MVR', symbol: 'Rf', name: 'Maldivian Rufiyaa' },
+            { code: 'BND', symbol: 'B$', name: 'Brunei Dollar' },
+            { code: 'FJD', symbol: 'FJ$', name: 'Fijian Dollar' },
+            { code: 'PGK', symbol: 'K', name: 'Papua New Guinean Kina' },
+            { code: 'WST', symbol: 'WS$', name: 'Samoan Tālā' },
+            { code: 'TOP', symbol: 'T$', name: 'Tongan Paʻanga' },
+            { code: 'VUV', symbol: 'VT', name: 'Vanuatu Vatu' },
+            { code: 'SBD', symbol: 'SI$', name: 'Solomon Islands Dollar' },
+            { code: 'SCR', symbol: 'SR', name: 'Seychellois Rupee' },
+            { code: 'MUR', symbol: 'Rs', name: 'Mauritian Rupee' },
+            { code: 'MWK', symbol: 'MK', name: 'Malawian Kwacha' },
+            { code: 'ZMW', symbol: 'ZK', name: 'Zambian Kwacha' },
+            { code: 'BWP', symbol: 'P', name: 'Botswana Pula' },
+            { code: 'NAD', symbol: 'N$', name: 'Namibian Dollar' },
+            { code: 'SZL', symbol: 'L', name: 'Swazi Lilangeni' },
+            { code: 'LSL', symbol: 'L', name: 'Lesotho Loti' },
+            { code: 'AOA', symbol: 'Kz', name: 'Angolan Kwanza' },
+            { code: 'MZN', symbol: 'MT', name: 'Mozambican Metical' },
+            { code: 'MGA', symbol: 'Ar', name: 'Malagasy Ariary' },
+            { code: 'TND', symbol: 'DT', name: 'Tunisian Dinar' },
+            { code: 'DZD', symbol: 'DA', name: 'Algerian Dinar' },
+            { code: 'LYD', symbol: 'LD', name: 'Libyan Dinar' },
+            { code: 'SDG', symbol: 'SDG', name: 'Sudanese Pound' },
+            { code: 'RWF', symbol: 'FRw', name: 'Rwandan Franc' },
+            { code: 'BIF', symbol: 'FBu', name: 'Burundian Franc' },
+            { code: 'DJF', symbol: 'Fdj', name: 'Djiboutian Franc' },
+            { code: 'SOS', symbol: 'Sh', name: 'Somali Shilling' },
+            { code: 'GMD', symbol: 'D', name: 'Gambian Dalasi' },
+            { code: 'SLL', symbol: 'Le', name: 'Sierra Leonean Leone' },
+            { code: 'LRD', symbol: 'L$', name: 'Liberian Dollar' },
+            { code: 'GNF', symbol: 'FG', name: 'Guinean Franc' },
+            { code: 'CVE', symbol: '$', name: 'Cape Verdean Escudo' },
+            { code: 'XOF', symbol: 'CFA', name: 'West African CFA Franc' },
+            { code: 'XAF', symbol: 'FCFA', name: 'Central African CFA Franc' },
+            { code: 'KMF', symbol: 'CF', name: 'Comorian Franc' },
+            { code: 'CDF', symbol: 'FC', name: 'Congolese Franc' },
+            { code: 'STN', symbol: 'Db', name: 'São Tomé and Príncipe Dobra' },
+            { code: 'ERN', symbol: 'Nfk', name: 'Eritrean Nakfa' },
+            { code: 'SHP', symbol: '£', name: 'Saint Helena Pound' },
+            { code: 'GIP', symbol: '£', name: 'Gibraltar Pound' },
+            { code: 'FKP', symbol: '£', name: 'Falkland Islands Pound' },
+            { code: 'KYD', symbol: 'CI$', name: 'Cayman Islands Dollar' },
+            { code: 'BMD', symbol: 'BD$', name: 'Bermudian Dollar' },
+            { code: 'AWG', symbol: 'ƒ', name: 'Aruban Florin' },
+            { code: 'ANG', symbol: 'ƒ', name: 'Netherlands Antillean Guilder' },
+            { code: 'SRD', symbol: '$', name: 'Surinamese Dollar' },
+            { code: 'GYD', symbol: 'G$', name: 'Guyanese Dollar' },
+            { code: 'HTG', symbol: 'G', name: 'Haitian Gourde' },
+            { code: 'CUP', symbol: '$', name: 'Cuban Peso' },
+            { code: 'CUC', symbol: 'CUC$', name: 'Cuban Convertible Peso' },
+            { code: 'IRR', symbol: '﷼', name: 'Iranian Rial' }
         ];
         
         const selectedCurrency = this._formData.currency || 'USD';
         
+        // Save CODE in value, but show CODE (SYMBOL) - Name in dropdown
         return currencies.map(c => 
             `<option value="${c.code}" ${selectedCurrency === c.code ? 'selected' : ''}>${c.code} (${c.symbol}) - ${c.name}</option>`
         ).join('');
@@ -1925,6 +1912,7 @@ class RealEstateDashboard extends HTMLElement {
         console.log('🏠 Dashboard: Loading related listings options');
         
         try {
+            // Dispatch event to get all listings for selection
             this._dispatchEvent('load-all-listings-for-selection', {
                 excludeId: this._selectedListing?._id || null
             });
@@ -1935,7 +1923,6 @@ class RealEstateDashboard extends HTMLElement {
     
     setAllListingsForSelection(listings) {
         console.log('🏠 Dashboard: Setting all listings for selection:', listings.length);
-        console.log('🏠 Dashboard: Current related properties:', this._formData.relatedProperties);
         
         const container = this._shadow.getElementById('relatedListingsContainer');
         if (!container) return;
@@ -1949,26 +1936,22 @@ class RealEstateDashboard extends HTMLElement {
         
         // Get currently selected related IDs
         const selectedIds = this._formData.relatedProperties || [];
-        console.log('🏠 Dashboard: Selected IDs to check:', selectedIds);
         
         listings.forEach(listing => {
             const isSelected = selectedIds.includes(listing._id);
-            console.log(`🏠 Dashboard: Listing ${listing._id} selected:`, isSelected);
             
+            // Convert Wix image URL to WixStatic URL
             const imageUrl = this._convertWixImageUrl(listing.thumbnailImage);
             
             const item = document.createElement('label');
             item.style.cssText = 'display: flex; align-items: center; gap: 12px; padding: 12px; border: 2px solid #e5e7eb; border-radius: 8px; margin-bottom: 8px; cursor: pointer; background: white; transition: all 0.2s;';
-            
-            const locationText = listing.location?.description || 
-                                (listing.location?.latitude ? `${listing.location.latitude}, ${listing.location.longitude}` : 'No location');
             
             item.innerHTML = `
                 <input type="checkbox" class="checkbox related-checkbox" data-id="${listing._id}" ${isSelected ? 'checked' : ''} style="flex-shrink: 0;">
                 <img src="${imageUrl}" style="width: 60px; height: 60px; object-fit: cover; border-radius: 6px; flex-shrink: 0;">
                 <div style="flex: 1; min-width: 0;">
                     <div style="font-weight: 600; font-size: 14px; color: #111827; margin-bottom: 4px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${listing.title}</div>
-                    <div style="font-size: 12px; color: #6b7280;">${locationText}</div>
+                    <div style="font-size: 12px; color: #6b7280;">${listing.location || 'No location'}</div>
                     <div style="font-size: 13px; font-weight: 700; color: #8b5cf6; margin-top: 4px;">${listing.currency || '$'}${this._formatNumber(listing.price || 0)}</div>
                 </div>
             `;
@@ -1990,8 +1973,6 @@ class RealEstateDashboard extends HTMLElement {
             
             container.appendChild(item);
         });
-        
-        console.log('🏠 Dashboard: Related listings rendered');
     }
     
     _updateRelatedProperties() {
